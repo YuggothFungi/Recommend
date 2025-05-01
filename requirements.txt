@@ -1,0 +1,6 @@
+pymorphy2
+nltk
+scikit-learn
+pandas
+matplotlib
+flask 
