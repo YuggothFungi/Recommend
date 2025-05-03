@@ -1,6 +1,5 @@
-import sqlite3
 import os
-from db import get_db_connection
+from src.db import get_db_connection
 
 def init_db():
     """Инициализация базы данных"""

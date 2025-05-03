@@ -3,7 +3,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import pickle
 import json
 import os
-from db import get_db_connection
+from src.db import get_db_connection
 
 class TextVectorizer:
     def __init__(self):

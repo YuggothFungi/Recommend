@@ -1,4 +1,4 @@
-from db import get_db_connection
+from src.db import get_db_connection
 
 def print_normalized_texts(cursor, table_name, original_field, normalized_field):
     """Выводит оригинальные и нормализованные тексты из указанной таблицы"""

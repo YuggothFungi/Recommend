@@ -2,7 +2,7 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 import re
-from db import get_db_connection
+from src.db import get_db_connection
 
 class TextProcessor:
     def __init__(self):
@@ -29,8 +29,8 @@ class TextProcessor:
         # Приводим к нижнему регистру
         text = text.lower()
         
-        # Удаляем специальные символы и цифры
-        text = re.sub(r'[^а-яё\s]', ' ', text)
+        # Удаляем специальные символы и цифры, оставляем буквы и пробелы
+        text = re.sub(r'[^а-яёa-z\s]', ' ', text)
         
         # Токенизация
         tokens = word_tokenize(text, language='russian')

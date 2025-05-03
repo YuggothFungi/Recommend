@@ -1,10 +1,9 @@
-import os
 import sys
 from datetime import datetime
-from schema import init_db
-from data_loader import load_all_data
-from text_processor import DatabaseTextProcessor
-from vectorizer import DatabaseVectorizer
+from src.schema import init_db
+from src.data_loader import load_all_data
+from src.text_processor import DatabaseTextProcessor
+from src.vectorizer import DatabaseVectorizer
 
 def main():
     """Главная точка входа для обработки данных"""

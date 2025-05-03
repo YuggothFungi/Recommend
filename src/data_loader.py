@@ -1,7 +1,7 @@
 import json
 import os
-from db import get_db_connection
-from schema import init_db
+from src.db import get_db_connection
+from src.schema import init_db
 
 def load_competencies():
     """Загрузка компетенций из abilities.json"""

@@ -1,6 +1,6 @@
 import pickle
 import numpy as np
-from db import get_db_connection
+from src.db import get_db_connection
 
 def print_vector_info(cursor, table_name, id_field, name_field):
     """Выводит информацию о векторах из указанной таблицы"""

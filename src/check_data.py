@@ -1,4 +1,4 @@
-from db import get_db_connection
+from src.db import get_db_connection
 
 def print_table_info(cursor, table_name):
     """Выводит информацию о количестве записей в таблице и первые несколько строк"""
