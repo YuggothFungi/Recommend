@@ -1,172 +1,148 @@
 import nltk
+from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
-import pymorphy2
 import re
 from db import get_db_connection
 
 class TextProcessor:
     def __init__(self):
-        # Инициализация pymorphy2
-        self.morph = pymorphy2.MorphAnalyzer()
-        
-        # Загрузка стоп-слов
+        # Загружаем необходимые ресурсы NLTK
         try:
+            nltk.data.find('tokenizers/punkt')
             nltk.data.find('corpora/stopwords')
-        except LookupError:
-            nltk.download('stopwords')
+            nltk.data.find('tokenizers/punkt_tab')
+        except LookupError as e:
+            print(f"Ошибка: {e}")
+            print("Пожалуйста, запустите src/download_nltk_data.py для загрузки необходимых ресурсов")
+            raise
         
+        # Загружаем стоп-слова
         self.stop_words = set(stopwords.words('russian'))
         # Добавляем дополнительные стоп-слова
-        self.stop_words.update(['это', 'который', 'который', 'который', 'который', 'который'])
-        
-        # Регулярное выражение для удаления специальных символов
-        self.pattern = re.compile(r'[^\w\s]')
+        self.stop_words.update(['это', 'который', 'которые', 'которых', 'которым', 'которыми'])
     
     def normalize_text(self, text):
-        """Нормализация текста: удаление спецсимволов, стоп-слов и лемматизация"""
+        """Нормализация текста"""
         if not text:
             return ""
-            
+        
         # Приводим к нижнему регистру
         text = text.lower()
         
-        # Удаляем специальные символы
-        text = self.pattern.sub(' ', text)
+        # Удаляем специальные символы и цифры
+        text = re.sub(r'[^а-яё\s]', ' ', text)
         
-        # Разбиваем на слова
-        words = text.split()
+        # Токенизация
+        tokens = word_tokenize(text, language='russian')
         
-        # Удаляем стоп-слова и лемматизируем
-        normalized_words = []
-        for word in words:
-            if word not in self.stop_words:
-                parsed = self.morph.parse(word)[0]
-                normalized_words.append(parsed.normal_form)
+        # Удаляем стоп-слова
+        tokens = [token for token in tokens if token not in self.stop_words]
         
-        return ' '.join(normalized_words)
+        # Удаляем короткие слова (меньше 2 символов)
+        tokens = [token for token in tokens if len(token) > 2]
+        
+        # Объединяем токены обратно в текст
+        return ' '.join(tokens)
 
 class DatabaseTextProcessor:
     def __init__(self):
         self.text_processor = TextProcessor()
     
-    def process_topics(self):
-        """Обработка текстов тем"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    def _process_text(self, cursor, table_name, id_field, text_fields):
+        """Обработка текстов в указанной таблице"""
+        # Формируем SQL-запрос для получения текстов
+        select_fields = ', '.join([f't.{field}' for field in text_fields])
+        cursor.execute(f"""
+            SELECT t.{id_field}, {select_fields}
+            FROM {table_name} t
+        """)
         
-        # Получаем все темы
-        cursor.execute("SELECT id, title, description FROM topics")
-        topics = cursor.fetchall()
-        
-        for topic in topics:
-            topic_id, title, description = topic
+        # Обрабатываем каждый текст
+        for row in cursor.fetchall():
+            id_value = row[0]
+            updates = {}
             
-            # Нормализуем заголовок и описание
-            normalized_title = self.text_processor.normalize_text(title)
-            normalized_description = self.text_processor.normalize_text(description)
+            # Обрабатываем каждое текстовое поле
+            for i, field in enumerate(text_fields, 1):
+                original_text = row[i]
+                if original_text:
+                    normalized_text = self.text_processor.normalize_text(original_text)
+                    updates[f'nltk_normalized_{field}'] = normalized_text
             
-            # Обновляем запись
-            cursor.execute("""
-                UPDATE topics 
-                SET pymorphy2_nltk_normalized_title = ?, 
-                    pymorphy2_nltk_normalized_description = ?
-                WHERE id = ?
-            """, (normalized_title, normalized_description, topic_id))
-        
-        conn.commit()
-        conn.close()
+            # Обновляем записи в базе
+            if updates:
+                # Проверяем существование колонок
+                for column in updates.keys():
+                    cursor.execute(f"""
+                        SELECT COUNT(*) 
+                        FROM pragma_table_info('{table_name}') 
+                        WHERE name = ?
+                    """, (column,))
+                    if cursor.fetchone()[0] == 0:
+                        cursor.execute(f"""
+                            ALTER TABLE {table_name}
+                            ADD COLUMN {column} TEXT
+                        """)
+                
+                # Обновляем значения
+                set_clause = ', '.join([f'{k} = ?' for k in updates.keys()])
+                values = list(updates.values()) + [id_value]
+                cursor.execute(f"""
+                    UPDATE {table_name}
+                    SET {set_clause}
+                    WHERE {id_field} = ?
+                """, values)
     
     def process_competencies(self):
         """Обработка текстов компетенций"""
+        print("Обработка компетенций...")
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Получаем все компетенции
-        cursor.execute("SELECT id, category, description FROM competencies")
-        competencies = cursor.fetchall()
-        
-        for comp in competencies:
-            comp_id, category, description = comp
-            
-            # Нормализуем категорию и описание
-            normalized_category = self.text_processor.normalize_text(category)
-            normalized_description = self.text_processor.normalize_text(description)
-            
-            # Обновляем запись
-            cursor.execute("""
-                UPDATE competencies 
-                SET pymorphy2_nltk_normalized_category = ?, 
-                    pymorphy2_nltk_normalized_description = ?
-                WHERE id = ?
-            """, (normalized_category, normalized_description, comp_id))
+        self._process_text(cursor, 'competencies', 'id', ['category', 'description'])
         
         conn.commit()
         conn.close()
     
     def process_labor_functions(self):
         """Обработка текстов трудовых функций"""
+        print("Обработка трудовых функций...")
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Получаем все трудовые функции
-        cursor.execute("SELECT id, name FROM labor_functions")
-        functions = cursor.fetchall()
-        
-        for func in functions:
-            func_id, name = func
-            
-            # Нормализуем название
-            normalized_name = self.text_processor.normalize_text(name)
-            
-            # Обновляем запись
-            cursor.execute("""
-                UPDATE labor_functions 
-                SET pymorphy2_nltk_normalized_name = ?
-                WHERE id = ?
-            """, (normalized_name, func_id))
+        self._process_text(cursor, 'labor_functions', 'id', ['name'])
         
         conn.commit()
         conn.close()
     
     def process_labor_components(self):
         """Обработка текстов компонентов трудовых функций"""
+        print("Обработка компонентов трудовых функций...")
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Получаем все компоненты
-        cursor.execute("SELECT id, description FROM labor_components")
-        components = cursor.fetchall()
+        self._process_text(cursor, 'labor_components', 'id', ['description'])
         
-        for comp in components:
-            comp_id, description = comp
-            
-            # Нормализуем описание
-            normalized_description = self.text_processor.normalize_text(description)
-            
-            # Обновляем запись
-            cursor.execute("""
-                UPDATE labor_components 
-                SET pymorphy2_nltk_normalized_description = ?
-                WHERE id = ?
-            """, (normalized_description, comp_id))
+        conn.commit()
+        conn.close()
+    
+    def process_topics(self):
+        """Обработка текстов тем"""
+        print("Обработка тем...")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        self._process_text(cursor, 'topics', 'id', ['title', 'description'])
         
         conn.commit()
         conn.close()
     
     def process_all(self):
-        """Обработка всех текстов в базе данных"""
-        print("Обработка тем...")
-        self.process_topics()
-        
-        print("Обработка компетенций...")
+        """Обработка всех текстов"""
         self.process_competencies()
-        
-        print("Обработка трудовых функций...")
         self.process_labor_functions()
-        
-        print("Обработка компонентов трудовых функций...")
         self.process_labor_components()
-        
+        self.process_topics()
         print("Обработка текстов завершена!")
 
 if __name__ == "__main__":

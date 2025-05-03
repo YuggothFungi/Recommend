@@ -6,7 +6,7 @@ def print_normalized_texts(cursor, table_name, original_field, normalized_field)
         SELECT {original_field}, {normalized_field}
         FROM {table_name} 
         WHERE {normalized_field} IS NOT NULL 
-        LIMIT 5
+        LIMIT 3
     """)
     rows = cursor.fetchall()
     
@@ -24,10 +24,10 @@ def check_normalized_texts():
     cursor = conn.cursor()
     
     # Проверяем нормализованные тексты в разных таблицах
-    print_normalized_texts(cursor, 'topics', 'title', 'pymorphy2_nltk_normalized_title')
-    print_normalized_texts(cursor, 'competencies', 'description', 'pymorphy2_nltk_normalized_description')
-    print_normalized_texts(cursor, 'labor_functions', 'name', 'pymorphy2_nltk_normalized_name')
-    print_normalized_texts(cursor, 'labor_components', 'description', 'pymorphy2_nltk_normalized_description')
+    print_normalized_texts(cursor, 'topics', 'title', 'nltk_normalized_title')
+    print_normalized_texts(cursor, 'competencies', 'description', 'nltk_normalized_description')
+    print_normalized_texts(cursor, 'labor_functions', 'name', 'nltk_normalized_name')
+    print_normalized_texts(cursor, 'labor_components', 'description', 'nltk_normalized_description')
     
     conn.close()
 

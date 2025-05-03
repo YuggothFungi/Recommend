@@ -8,12 +8,15 @@ def load_competencies():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Очищаем таблицу перед загрузкой
+    cursor.execute("DELETE FROM competencies")
+    
     with open('input/abilities.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
         
     for comp_id, comp_data in data.items():
         cursor.execute("""
-            INSERT OR REPLACE INTO competencies (id, category, description)
+            INSERT INTO competencies (id, category, description)
             VALUES (?, ?, ?)
         """, (comp_id, comp_data['категория'], comp_data['описание']))
     
@@ -25,20 +28,25 @@ def load_labor_functions():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Очищаем таблицы перед загрузкой
+    cursor.execute("DELETE FROM labor_function_components")
+    cursor.execute("DELETE FROM labor_components")
+    cursor.execute("DELETE FROM labor_functions")
+    
     with open('input/prof_std.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
         
     for func in data['профессиональный_стандарт']['трудовые_функции']:
         # Загружаем трудовую функцию
         cursor.execute("""
-            INSERT OR REPLACE INTO labor_functions (id, code, name, qualification_level)
-            VALUES (?, ?, ?, ?)
-        """, (func['идентификатор'], func['код'], func['наименование'], func['уровень_квалификации']))
+            INSERT INTO labor_functions (id, name)
+            VALUES (?, ?)
+        """, (func['идентификатор'], func['наименование']))
         
         # Загружаем трудовые действия
         for action in func['трудовые_действия']:
             cursor.execute("""
-                INSERT OR IGNORE INTO labor_components (component_type_id, description)
+                INSERT INTO labor_components (component_type_id, description)
                 VALUES (1, ?)
             """, (action,))
             
@@ -48,14 +56,14 @@ def load_labor_functions():
             
             # Создаем связь с трудовой функцией
             cursor.execute("""
-                INSERT OR IGNORE INTO labor_function_components (labor_function_id, component_id)
+                INSERT INTO labor_function_components (labor_function_id, component_id)
                 VALUES (?, ?)
             """, (func['идентификатор'], component_id))
             
         # Загружаем необходимые умения
         for skill in func['необходимые_умения']:
             cursor.execute("""
-                INSERT OR IGNORE INTO labor_components (component_type_id, description)
+                INSERT INTO labor_components (component_type_id, description)
                 VALUES (2, ?)
             """, (skill,))
             
@@ -63,14 +71,14 @@ def load_labor_functions():
             component_id = cursor.fetchone()[0]
             
             cursor.execute("""
-                INSERT OR IGNORE INTO labor_function_components (labor_function_id, component_id)
+                INSERT INTO labor_function_components (labor_function_id, component_id)
                 VALUES (?, ?)
             """, (func['идентификатор'], component_id))
             
         # Загружаем необходимые знания
         for knowledge in func['необходимые_знания']:
             cursor.execute("""
-                INSERT OR IGNORE INTO labor_components (component_type_id, description)
+                INSERT INTO labor_components (component_type_id, description)
                 VALUES (3, ?)
             """, (knowledge,))
             
@@ -78,7 +86,7 @@ def load_labor_functions():
             component_id = cursor.fetchone()[0]
             
             cursor.execute("""
-                INSERT OR IGNORE INTO labor_function_components (labor_function_id, component_id)
+                INSERT INTO labor_function_components (labor_function_id, component_id)
                 VALUES (?, ?)
             """, (func['идентификатор'], component_id))
     
@@ -89,6 +97,10 @@ def load_topics():
     """Загрузка тем из файлов в директории curriculum_disciplines"""
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # Очищаем таблицы перед загрузкой
+    cursor.execute("DELETE FROM topic_competency")
+    cursor.execute("DELETE FROM topics")
     
     # Получаем список всех JSON файлов в директории
     discipline_files = [f for f in os.listdir('input/curriculum_disciplines') 
@@ -107,14 +119,11 @@ def load_topics():
                 # Загружаем темы лекций
                 for lecture in section['лекции']:
                     cursor.execute("""
-                        INSERT INTO topics (title, description, hours, semester, section_number)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO topics (title, description)
+                        VALUES (?, ?)
                     """, (
                         lecture['тема'],
-                        section['содержание'],  # Используем содержание раздела как описание
-                        lecture['часы'],
-                        semester['номер'],
-                        section['номер']
+                        section['содержание']  # Используем содержание раздела как описание
                     ))
                     
                     topic_id = cursor.lastrowid
@@ -122,21 +131,18 @@ def load_topics():
                     # Создаем связи с компетенциями
                     for comp_id in data[program_key]['компетенции']:
                         cursor.execute("""
-                            INSERT OR IGNORE INTO topic_competency (topic_id, competency_id)
+                            INSERT INTO topic_competency (topic_id, competency_id)
                             VALUES (?, ?)
                         """, (topic_id, comp_id))
                 
                 # Загружаем темы практических занятий
                 for practice in section['практические']:
                     cursor.execute("""
-                        INSERT INTO topics (title, description, hours, semester, section_number)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO topics (title, description)
+                        VALUES (?, ?)
                     """, (
                         practice['тема'],
-                        section['содержание'],  # Используем содержание раздела как описание
-                        practice['часы'],
-                        semester['номер'],
-                        section['номер']
+                        section['содержание']  # Используем содержание раздела как описание
                     ))
                     
                     topic_id = cursor.lastrowid
@@ -144,7 +150,7 @@ def load_topics():
                     # Создаем связи с компетенциями
                     for comp_id in data[program_key]['компетенции']:
                         cursor.execute("""
-                            INSERT OR IGNORE INTO topic_competency (topic_id, competency_id)
+                            INSERT INTO topic_competency (topic_id, competency_id)
                             VALUES (?, ?)
                         """, (topic_id, comp_id))
     
