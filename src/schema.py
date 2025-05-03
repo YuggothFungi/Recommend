@@ -85,7 +85,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS topic_vectors (
             topic_id INTEGER PRIMARY KEY,
-            vector BLOB NOT NULL,
+            tfidf_vector BLOB NOT NULL,
             FOREIGN KEY (topic_id) REFERENCES topics(id)
         )
     """)
@@ -94,7 +94,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS labor_function_vectors (
             labor_function_id TEXT PRIMARY KEY,
-            vector BLOB NOT NULL,
+            tfidf_vector BLOB NOT NULL,
             FOREIGN KEY (labor_function_id) REFERENCES labor_functions(id)
         )
     """)
