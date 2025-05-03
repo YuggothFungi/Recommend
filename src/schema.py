@@ -78,6 +78,20 @@ def init_db():
         FOREIGN KEY (topic_id) REFERENCES topics(id),
         FOREIGN KEY (labor_function_id) REFERENCES labor_functions(id)
     );
+
+    -- Векторы тем
+    CREATE TABLE IF NOT EXISTS topic_vectors (
+        topic_id INTEGER PRIMARY KEY,
+        vector BLOB NOT NULL,
+        FOREIGN KEY (topic_id) REFERENCES topics(id)
+    );
+
+    -- Векторы трудовых функций
+    CREATE TABLE IF NOT EXISTS labor_function_vectors (
+        labor_function_id TEXT PRIMARY KEY,
+        vector BLOB NOT NULL,
+        FOREIGN KEY (labor_function_id) REFERENCES labor_functions(id)
+    );
     """)
     
     # Заполнение справочника типов компонентов
