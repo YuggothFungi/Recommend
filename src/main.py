@@ -31,7 +31,8 @@ def main():
         
         # 4. Векторизация
         print("\n4. Векторизация...")
-        vectorizer = DatabaseVectorizer()
+        # Используем TF-IDF векторизатор по умолчанию
+        vectorizer = DatabaseVectorizer(vectorizer_type="tfidf")
         vectorizer.vectorize_all()
         print("✓ Векторизация успешно завершена")
         

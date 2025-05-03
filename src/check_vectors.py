@@ -5,7 +5,7 @@ from db import get_db_connection
 def print_vector_info(cursor, table_name, id_field, name_field):
     """Выводит информацию о векторах из указанной таблицы"""
     cursor.execute(f"""
-        SELECT v.{id_field}, {name_field}, v.vector
+        SELECT v.{id_field}, {name_field}, v.tfidf_vector
         FROM {table_name} v
         JOIN {table_name.split('_vectors')[0]}s t ON v.{id_field} = t.id
         LIMIT 5
