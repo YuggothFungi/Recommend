@@ -3,7 +3,7 @@ from datetime import datetime
 from src.schema import init_db
 from src.data_loader import load_all_data
 from src.text_processor import DatabaseTextProcessor
-from src.vectorizer import DatabaseVectorizer
+from src.tfidf_vectorizer import DatabaseVectorizer
 
 def main():
     """Главная точка входа для обработки данных"""
@@ -30,8 +30,7 @@ def main():
         
         # 4. Векторизация
         print("\n4. Векторизация...")
-        # Используем TF-IDF векторизатор по умолчанию
-        vectorizer = DatabaseVectorizer(vectorizer_type="tfidf")
+        vectorizer = DatabaseVectorizer()
         vectorizer.vectorize_all()
         print("✓ Векторизация успешно завершена")
         
