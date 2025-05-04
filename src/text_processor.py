@@ -120,16 +120,21 @@ class DatabaseTextProcessor:
         if should_close:
             conn.close()
     
-    def process_labor_components(self):
+    def process_labor_components(self, conn=None):
         """Обработка текстов компонентов трудовых функций"""
         print("Обработка компонентов трудовых функций...")
-        conn = get_db_connection()
+        if conn is None:
+            conn = get_db_connection()
+            should_close = True
+        else:
+            should_close = False
+            
         cursor = conn.cursor()
-        
         self._process_text(cursor, 'labor_components', 'id', ['description'])
-        
         conn.commit()
-        conn.close()
+        
+        if should_close:
+            conn.close()
     
     def process_topics(self, conn=None):
         """Обработка текстов тем"""

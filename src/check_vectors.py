@@ -28,22 +28,29 @@ def print_vector_info(cursor, table_name, id_field, text_field):
         print(f"Название: {text}")
         
         if tfidf_vector is not None:
-            vector = pickle.loads(tfidf_vector)
-            print(f"Размерность TF-IDF вектора: {vector.shape}")
-            print(f"Количество ненулевых элементов: {vector.getnnz()}")
-            print("Пример ненулевых элементов (первые 5):")
-            nonzero = vector.nonzero()
-            for i in range(min(5, len(nonzero[1]))):
-                idx = nonzero[1][i]
-                val = vector[0, idx]
-                print(f"  Индекс: {idx}, Значение: {val:.4f}")
+            try:
+                vector = np.frombuffer(tfidf_vector, dtype=np.float32)
+                print(f"Размерность TF-IDF вектора: {vector.shape}")
+                print("Пример значений вектора (первые 5):")
+                for i in range(min(5, len(vector))):
+                    print(f"  Индекс: {i}, Значение: {vector[i]:.4f}")
+                print(f"Количество ненулевых элементов: {np.count_nonzero(vector)}")
+            except Exception as e:
+                print(f"❌ Ошибка при загрузке TF-IDF вектора: {str(e)}")
+                print(f"Размер вектора в байтах: {len(tfidf_vector)}")
+                print("Первые 10 байт:", ' '.join(f'{b:02x}' for b in tfidf_vector[:10]))
         
         if rubert_vector is not None:
-            vector = np.frombuffer(rubert_vector, dtype=np.float32)
-            print(f"Размерность ruBERT вектора: {vector.shape}")
-            print("Пример значений вектора (первые 5):")
-            for i in range(min(5, len(vector))):
-                print(f"  Индекс: {i}, Значение: {vector[i]:.4f}")
+            try:
+                vector = np.frombuffer(rubert_vector, dtype=np.float32)
+                print(f"Размерность ruBERT вектора: {vector.shape}")
+                print("Пример значений вектора (первые 5):")
+                for i in range(min(5, len(vector))):
+                    print(f"  Индекс: {i}, Значение: {vector[i]:.4f}")
+            except Exception as e:
+                print(f"❌ Ошибка при загрузке ruBERT вектора: {str(e)}")
+                print(f"Размер вектора в байтах: {len(rubert_vector)}")
+                print("Первые 10 байт:", ' '.join(f'{b:02x}' for b in rubert_vector[:10]))
         
         print("-" * 50)
 

@@ -18,18 +18,43 @@ def print_normalized_texts(cursor, table_name, original_field, normalized_field)
         print(row[1])
         print("-" * 50)
 
-def check_normalized_texts():
-    """Проверка нормализованных текстов"""
-    conn = get_db_connection()
+def check_normalized_texts(conn):
+    """Проверка наличия нормализованных текстов"""
     cursor = conn.cursor()
     
-    # Проверяем нормализованные тексты в разных таблицах
-    print_normalized_texts(cursor, 'topics', 'title', 'nltk_normalized_title')
-    print_normalized_texts(cursor, 'competencies', 'description', 'nltk_normalized_description')
-    print_normalized_texts(cursor, 'labor_functions', 'name', 'nltk_normalized_name')
-    print_normalized_texts(cursor, 'labor_components', 'description', 'nltk_normalized_description')
+    # Проверяем темы
+    cursor.execute("""
+        SELECT COUNT(*) 
+        FROM topics 
+        WHERE nltk_normalized_title IS NULL 
+        OR nltk_normalized_description IS NULL
+    """)
+    unnormalized_topics = cursor.fetchone()[0]
+    if unnormalized_topics > 0:
+        raise ValueError(f"Есть {unnormalized_topics} ненормализованных текстов в таблице topics")
     
-    conn.close()
+    # Проверяем трудовые функции
+    cursor.execute("""
+        SELECT COUNT(*) 
+        FROM labor_functions 
+        WHERE nltk_normalized_name IS NULL
+    """)
+    unnormalized_functions = cursor.fetchone()[0]
+    if unnormalized_functions > 0:
+        raise ValueError(f"Есть {unnormalized_functions} ненормализованных текстов в таблице labor_functions")
+    
+    # Проверяем компоненты
+    cursor.execute("""
+        SELECT COUNT(*) 
+        FROM labor_components 
+        WHERE nltk_normalized_description IS NULL
+    """)
+    unnormalized_components = cursor.fetchone()[0]
+    if unnormalized_components > 0:
+        raise ValueError(f"Есть {unnormalized_components} ненормализованных текстов в таблице labor_components")
+    
+    print("Все тексты нормализованы")
 
 if __name__ == "__main__":
-    check_normalized_texts() 
+    conn = get_db_connection()
+    check_normalized_texts(conn) 

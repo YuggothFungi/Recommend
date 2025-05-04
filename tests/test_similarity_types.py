@@ -8,6 +8,16 @@ def test_similarity_types(db_connection):
     """Тест расчета сходства между темами и трудовыми функциями"""
     cursor = db_connection.cursor()
     
+    # Очищаем таблицы перед тестом
+    cursor.execute("DROP TABLE IF EXISTS topic_labor_function")
+    cursor.execute("DROP TABLE IF EXISTS topic_vectors")
+    cursor.execute("DROP TABLE IF EXISTS labor_function_vectors")
+    cursor.execute("DROP TABLE IF EXISTS labor_function_components")
+    cursor.execute("DROP TABLE IF EXISTS labor_components")
+    cursor.execute("DROP TABLE IF EXISTS component_types")
+    cursor.execute("DROP TABLE IF EXISTS labor_functions")
+    cursor.execute("DROP TABLE IF EXISTS topics")
+    
     # Создаем необходимые таблицы
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS topics (
@@ -90,9 +100,9 @@ def test_similarity_types(db_connection):
     # Добавляем тестовые данные
     # Добавляем темы
     topics_data = [
-        (1, "Python", "Программирование на Python", None, None, None),
-        (2, "Web", "Разработка веб-приложений", None, None, None),
-        (3, "ML", "Машинное обучение", None, None, None)
+        (1, "Python", "Программирование на Python", "python", "программирование python", None),
+        (2, "Web", "Разработка веб-приложений", "web", "разработка веб приложение", None),
+        (3, "ML", "Машинное обучение", "ml", "машинный обучение", None)
     ]
     cursor.executemany(
         "INSERT INTO topics (id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector) VALUES (?, ?, ?, ?, ?, ?)",
@@ -101,30 +111,28 @@ def test_similarity_types(db_connection):
     
     # Добавляем трудовые функции
     functions_data = [
-        ("F1", "Разработка программ", None, None),
-        ("F2", "Создание веб-сайтов", None, None),
-        ("F3", "Анализ данных", None, None)
+        ("F1", "Разработка программ", "разработка программа", None),
+        ("F2", "Создание веб-сайтов", "создание веб сайт", None),
+        ("F3", "Анализ данных", "анализ данные", None)
     ]
     cursor.executemany(
         "INSERT INTO labor_functions (id, name, nltk_normalized_name, rubert_vector) VALUES (?, ?, ?, ?)",
         functions_data
     )
     
-    # Добавляем типы компонентов, если их нет
-    cursor.execute("SELECT COUNT(*) FROM component_types")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("""
-            INSERT INTO component_types (id, name) VALUES
-            (1, 'action'),
-            (2, 'skill'),
-            (3, 'knowledge')
-        """)
+    # Добавляем типы компонентов
+    cursor.execute("""
+        INSERT INTO component_types (id, name) VALUES
+        (1, 'action'),
+        (2, 'skill'),
+        (3, 'knowledge')
+    """)
     
     # Добавляем компоненты
     components_data = [
-        (1, 1, "Использование Python", None, None),
-        (2, 2, "Работа с фреймворками", None, None),
-        (3, 3, "Использование библиотек ML", None, None)
+        (1, 1, "Использование Python", "использование python", None),
+        (2, 2, "Работа с фреймворками", "работа фреймворк", None),
+        (3, 3, "Использование библиотек ML", "использование библиотека ml", None)
     ]
     cursor.executemany(
         "INSERT INTO labor_components (id, component_type_id, description, nltk_normalized_description, rubert_vector) VALUES (?, ?, ?, ?, ?)",
@@ -148,6 +156,17 @@ def test_similarity_types(db_connection):
     text_processor = DatabaseTextProcessor()
     text_processor.process_topics(db_connection)
     text_processor.process_labor_functions(db_connection)
+    text_processor.process_labor_components(db_connection)
+    
+    # Проверяем, что тексты нормализованы
+    cursor.execute("SELECT COUNT(*) FROM topics WHERE nltk_normalized_title IS NULL OR nltk_normalized_description IS NULL")
+    assert cursor.fetchone()[0] == 0
+    
+    cursor.execute("SELECT COUNT(*) FROM labor_functions WHERE nltk_normalized_name IS NULL")
+    assert cursor.fetchone()[0] == 0
+    
+    cursor.execute("SELECT COUNT(*) FROM labor_components WHERE nltk_normalized_description IS NULL")
+    assert cursor.fetchone()[0] == 0
     
     # Векторизуем тексты
     tfidf_vectorizer = DatabaseVectorizer()
@@ -155,6 +174,13 @@ def test_similarity_types(db_connection):
     
     rubert_vectorizer = RuBertVectorizer()
     rubert_vectorizer.vectorize_all(db_connection)
+    
+    # Проверяем, что векторы сохранены
+    cursor.execute("SELECT COUNT(*) FROM topic_vectors")
+    assert cursor.fetchone()[0] == len(topics_data)
+    
+    cursor.execute("SELECT COUNT(*) FROM labor_function_vectors")
+    assert cursor.fetchone()[0] == len(functions_data)
     
     # Проверяем, что таблица topic_labor_function пуста
     cursor.execute("SELECT COUNT(*) FROM topic_labor_function")

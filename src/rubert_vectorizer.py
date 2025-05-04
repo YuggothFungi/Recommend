@@ -6,11 +6,12 @@ import json
 import os
 import sqlite3
 from src.db import get_db_connection
+from src.check_normalized_texts import check_normalized_texts
 
 class RuBertVectorizer:
     """Векторизатор на основе ruBERT"""
     
-    def __init__(self):
+    def __init__(self, conn=None):
         """Инициализация векторизатора"""
         self.model_name = 'sberbank-ai/sbert_large_nlu_ru'
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
@@ -19,7 +20,7 @@ class RuBertVectorizer:
         self.model.to(self.device)
         self.model.eval()
         self.vector_size = 1024  # Размер вектора для sbert_large_nlu_ru
-        self.db_conn = get_db_connection()
+        self.db_conn = conn  # Использовать переданное соединение
     
     def _mean_pooling(self, model_output, attention_mask):
         """Усреднение токенов для получения эмбеддинга предложения"""
@@ -115,9 +116,14 @@ class RuBertVectorizer:
         
         return result
     
-    def _vectorize_table(self, table_name: str, text_column: str) -> None:
+    def _vectorize_table(self, table_name: str, text_column: str, conn=None) -> None:
         """Векторизация текстов в таблице"""
-        cursor = self.db_conn.cursor()
+        if conn is None:
+            conn = self.db_conn
+        if conn is None:
+            raise ValueError("Не указано соединение с базой данных")
+            
+        cursor = conn.cursor()
         
         # Проверяем наличие столбца rubert_vector
         cursor.execute(f"PRAGMA table_info({table_name})")
@@ -151,7 +157,7 @@ class RuBertVectorizer:
                 WHERE id = ?
             """, (vector_bytes, text_id))
         
-        self.db_conn.commit()
+        conn.commit()
     
     def vectorize_all(self, conn=None) -> None:
         """Векторизация всех текстов в базе данных"""
@@ -160,6 +166,9 @@ class RuBertVectorizer:
             should_close = True
         else:
             should_close = False
+            
+        # Проверяем нормализованные тексты
+        check_normalized_texts(conn)
             
         cursor = conn.cursor()
         
@@ -181,10 +190,23 @@ class RuBertVectorizer:
         
         for (topic_id, _), vector in zip(topic_texts, topic_vectors):
             vector_bytes = vector.tobytes()
+            # Проверяем существование записи
             cursor.execute("""
-                INSERT OR REPLACE INTO topic_vectors (topic_id, rubert_vector)
-                VALUES (?, ?)
-            """, (topic_id, vector_bytes))
+                SELECT COUNT(*) FROM topic_vectors WHERE topic_id = ?
+            """, (topic_id,))
+            exists = cursor.fetchone()[0] > 0
+            
+            if exists:
+                cursor.execute("""
+                    UPDATE topic_vectors
+                    SET rubert_vector = ?
+                    WHERE topic_id = ?
+                """, (vector_bytes, topic_id))
+            else:
+                cursor.execute("""
+                    INSERT INTO topic_vectors (topic_id, rubert_vector)
+                    VALUES (?, ?)
+                """, (topic_id, vector_bytes))
         
         # Векторизуем трудовые функции
         print("Векторизация трудовых функций...")
@@ -193,10 +215,23 @@ class RuBertVectorizer:
         
         for (function_id, _), vector in zip(function_texts, function_vectors):
             vector_bytes = vector.tobytes()
+            # Проверяем существование записи
             cursor.execute("""
-                INSERT OR REPLACE INTO labor_function_vectors (labor_function_id, rubert_vector)
-                VALUES (?, ?)
-            """, (function_id, vector_bytes))
+                SELECT COUNT(*) FROM labor_function_vectors WHERE labor_function_id = ?
+            """, (function_id,))
+            exists = cursor.fetchone()[0] > 0
+            
+            if exists:
+                cursor.execute("""
+                    UPDATE labor_function_vectors
+                    SET rubert_vector = ?
+                    WHERE labor_function_id = ?
+                """, (vector_bytes, function_id))
+            else:
+                cursor.execute("""
+                    INSERT INTO labor_function_vectors (labor_function_id, rubert_vector)
+                    VALUES (?, ?)
+                """, (function_id, vector_bytes))
         
         conn.commit()
         

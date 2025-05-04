@@ -27,9 +27,9 @@ def clean_db(db_connection):
     db_connection.commit()
 
 @pytest.fixture
-def vectorizer():
+def vectorizer(db_connection):
     """Создание экземпляра RuBertVectorizer"""
-    return RuBertVectorizer()
+    return RuBertVectorizer(conn=db_connection)
 
 @pytest.fixture
 def test_texts():
@@ -109,7 +109,7 @@ def test_vectorize_table(vectorizer, db_connection):
     db_connection.commit()
     
     # Векторизуем таблицу
-    vectorizer._vectorize_table("test_table", "text")
+    vectorizer._vectorize_table("test_table", "text", conn=db_connection)
     
     # Проверяем, что векторы добавлены
     cursor.execute("SELECT rubert_vector FROM test_table")

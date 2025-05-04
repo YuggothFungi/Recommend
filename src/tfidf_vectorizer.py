@@ -4,6 +4,7 @@ import pickle
 import json
 import os
 from src.db import get_db_connection
+from src.check_normalized_texts import check_normalized_texts
 
 class TextVectorizer:
     def __init__(self):
@@ -69,22 +70,94 @@ class DatabaseVectorizer:
         cursor.execute("""
             SELECT 
                 lf.id,
-                COALESCE(lf.nltk_normalized_name, '') || ' ' ||
-                GROUP_CONCAT(COALESCE(lc.nltk_normalized_description, ''), ' ')
+                COALESCE(lf.nltk_normalized_name, '')
             FROM labor_functions lf
-            LEFT JOIN labor_function_components lfc ON lf.id = lfc.labor_function_id
-            LEFT JOIN labor_components lc ON lfc.component_id = lc.id
-            GROUP BY lf.id
         """)
-        return cursor.fetchall()
+        function_texts = cursor.fetchall()
+        
+        # Получаем компоненты для каждой функции
+        result = []
+        for function_id, function_text in function_texts:
+            cursor.execute("""
+                SELECT COALESCE(lc.nltk_normalized_description, '')
+                FROM labor_function_components lfc
+                JOIN labor_components lc ON lfc.component_id = lc.id
+                WHERE lfc.labor_function_id = ?
+            """, (function_id,))
+            component_texts = cursor.fetchall()
+            
+            # Объединяем тексты компонентов
+            component_text = ' '.join(text[0] for text in component_texts)
+            
+            # Объединяем с текстом функции
+            full_text = f"{function_text} {component_text}".strip()
+            result.append((function_id, full_text))
+        
+        return result
     
     def _save_vector(self, cursor, table_name, id_field, id_value, vector):
         """Сохранение вектора в базу данных"""
-        vector_bytes = pickle.dumps(vector)
+        # Проверяем существование колонки tfidf_vector
         cursor.execute(f"""
-            INSERT OR REPLACE INTO {table_name} ({id_field}, tfidf_vector)
-            VALUES (?, ?)
-        """, (id_value, vector_bytes))
+            SELECT COUNT(*) 
+            FROM pragma_table_info('{table_name}') 
+            WHERE name = 'tfidf_vector'
+        """)
+        if cursor.fetchone()[0] == 0:
+            print(f"Добавляем колонку tfidf_vector в таблицу {table_name}")
+            cursor.execute(f"""
+                ALTER TABLE {table_name}
+                ADD COLUMN tfidf_vector BLOB
+            """)
+        
+        # Преобразуем sparse matrix в dense array
+        if hasattr(vector, 'toarray'):
+            vector = vector.toarray()
+        
+        # Преобразуем в float32 для совместимости с calculate_similarities
+        vector = vector.astype(np.float32).reshape(-1)
+        vector_bytes = vector.tobytes()
+        
+        print(f"Сохранение вектора для {id_field}={id_value} в таблице {table_name}")
+        print(f"Размер вектора: {vector.shape}, тип: {vector.dtype}")
+        
+        # Проверяем, существует ли запись
+        cursor.execute(f"""
+            SELECT COUNT(*) 
+            FROM {table_name} 
+            WHERE {id_field} = ?
+        """, (id_value,))
+        exists = cursor.fetchone()[0] > 0
+        
+        if exists:
+            # Обновляем существующую запись
+            cursor.execute(f"""
+                UPDATE {table_name}
+                SET tfidf_vector = ?
+                WHERE {id_field} = ?
+            """, (vector_bytes, id_value))
+        else:
+            # Создаем новую запись
+            cursor.execute(f"""
+                INSERT INTO {table_name} ({id_field}, tfidf_vector)
+                VALUES (?, ?)
+            """, (id_value, vector_bytes))
+        
+        # Проверяем, что вектор сохранен
+        cursor.execute(f"""
+            SELECT tfidf_vector 
+            FROM {table_name} 
+            WHERE {id_field} = ?
+        """, (id_value,))
+        saved_vector = cursor.fetchone()
+        if saved_vector and saved_vector[0]:
+            saved_vector_array = np.frombuffer(saved_vector[0], dtype=np.float32)
+            print(f"Вектор успешно сохранен для {id_field}={id_value}")
+            print(f"Размер сохраненного вектора: {saved_vector_array.shape}")
+            print(f"Сумма элементов: {np.sum(saved_vector_array)}")
+            print(f"Количество ненулевых элементов: {np.count_nonzero(saved_vector_array)}")
+        else:
+            print(f"Ошибка: вектор не сохранен для {id_field}={id_value}")
     
     def vectorize_all(self, conn=None):
         """Векторизация всех текстов"""
@@ -93,6 +166,9 @@ class DatabaseVectorizer:
             should_close = True
         else:
             should_close = False
+            
+        # Проверяем нормализованные тексты
+        check_normalized_texts(conn)
             
         cursor = conn.cursor()
         
