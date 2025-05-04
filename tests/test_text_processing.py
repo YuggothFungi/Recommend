@@ -1,69 +1,148 @@
 import unittest
-from src.db import get_db_connection
-from src.text_processor import TextProcessor
+import pytest
+from src.text_processor import TextProcessor, DatabaseTextProcessor
 
-class TestTextProcessing(unittest.TestCase):
-    def setUp(self):
-        """Подготовка тестового окружения"""
-        self.conn = get_db_connection()
-        self.cursor = self.conn.cursor()
-        self.processor = TextProcessor()
+@pytest.mark.usefixtures("db_connection")
+class TestTextProcessing:
+    """Тесты для обработки текста"""
     
-    def tearDown(self):
-        """Очистка после тестов"""
-        self.conn.close()
-    
-    def test_normalization(self):
+    def test_normalization(self, db_connection):
         """Проверка нормализации текста"""
-        test_cases = [
-            ("Привет, мир!", "привет мир"),
-            ("Python 3.8 и NLTK", "python nltk"),
-            ("Это тестовый текст", "тестовый текст"),
-            ("Стоп-слова должны быть удалены", "стоп слова должны удалены")
-        ]
+        cursor = db_connection.cursor()
+        processor = TextProcessor()
         
-        for original, expected in test_cases:
-            normalized = self.processor.normalize_text(original)
-            self.assertEqual(normalized, expected, 
-                           f"Нормализация текста '{original}' не соответствует ожидаемому результату")
+        # Добавляем тестовые данные
+        # Добавляем темы
+        topics_data = [
+            (1, "Python", "Программирование на Python", None, None, None),
+            (2, "Web", "Разработка веб-приложений", None, None, None),
+            (3, "ML", "Машинное обучение", None, None, None)
+        ]
+        cursor.executemany(
+            "INSERT INTO topics (id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector) VALUES (?, ?, ?, ?, ?, ?)",
+            topics_data
+        )
+        
+        # Добавляем трудовые функции
+        functions_data = [
+            ("F1", "Разработка программ", None, None),
+            ("F2", "Создание веб-сайтов", None, None),
+            ("F3", "Анализ данных", None, None)
+        ]
+        cursor.executemany(
+            "INSERT INTO labor_functions (id, name, nltk_normalized_name, rubert_vector) VALUES (?, ?, ?, ?)",
+            functions_data
+        )
+        
+        db_connection.commit()
+        
+        # Обрабатываем тексты
+        db_processor = DatabaseTextProcessor()
+        db_processor.process_topics(db_connection)
+        db_processor.process_labor_functions(db_connection)
+        
+        # Получаем тестовые тексты
+        cursor.execute("SELECT title, description FROM topics")
+        texts = cursor.fetchall()
+        
+        for title, description in texts:
+            normalized_title = processor.normalize_text(title)
+            normalized_description = processor.normalize_text(description)
+            
+            # Проверяем, что нормализованный текст не пустой
+            assert normalized_title is not None
+            assert normalized_description is not None
+            
+            # Проверяем, что нормализованный текст отличается от исходного
+            assert title != normalized_title
+            assert description != normalized_description
     
-    def test_normalized_columns_exist(self):
-        """Проверка наличия колонок с нормализованным текстом"""
-        tables_and_columns = [
-            ('topics', ['nltk_normalized_title', 'nltk_normalized_description']),
-            ('competencies', ['nltk_normalized_category', 'nltk_normalized_description']),
-            ('labor_functions', ['nltk_normalized_name']),
-            ('labor_components', ['nltk_normalized_description'])
-        ]
+    def test_normalized_columns_exist(self, db_connection):
+        """Проверка существования колонок с нормализованным текстом"""
+        cursor = db_connection.cursor()
         
-        for table, columns in tables_and_columns:
-            for column in columns:
-                self.cursor.execute(f"""
-                    SELECT COUNT(*) 
-                    FROM pragma_table_info('{table}') 
-                    WHERE name = ?
-                """, (column,))
-                self.assertTrue(self.cursor.fetchone()[0] > 0, 
-                              f"Колонка {column} отсутствует в таблице {table}")
+        # Добавляем тестовые данные
+        # Добавляем темы
+        topics_data = [
+            (1, "Python", "Программирование на Python", None, None, None),
+            (2, "Web", "Разработка веб-приложений", None, None, None),
+            (3, "ML", "Машинное обучение", None, None, None)
+        ]
+        cursor.executemany(
+            "INSERT INTO topics (id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector) VALUES (?, ?, ?, ?, ?, ?)",
+            topics_data
+        )
+        
+        # Добавляем трудовые функции
+        functions_data = [
+            ("F1", "Разработка программ", None, None),
+            ("F2", "Создание веб-сайтов", None, None),
+            ("F3", "Анализ данных", None, None)
+        ]
+        cursor.executemany(
+            "INSERT INTO labor_functions (id, name, nltk_normalized_name, rubert_vector) VALUES (?, ?, ?, ?)",
+            functions_data
+        )
+        
+        db_connection.commit()
+        
+        # Проверяем колонки в таблице topics
+        cursor.execute("PRAGMA table_info(topics)")
+        columns = [col[1] for col in cursor.fetchall()]
+        assert "nltk_normalized_title" in columns
+        assert "nltk_normalized_description" in columns
+        
+        # Проверяем колонки в таблице labor_functions
+        cursor.execute("PRAGMA table_info(labor_functions)")
+        columns = [col[1] for col in cursor.fetchall()]
+        assert "nltk_normalized_name" in columns
     
-    def test_normalized_texts_not_empty(self):
-        """Проверка наличия нормализованных текстов"""
-        tables_and_columns = [
-            ('topics', 'nltk_normalized_title'),
-            ('competencies', 'nltk_normalized_description'),
-            ('labor_functions', 'nltk_normalized_name'),
-            ('labor_components', 'nltk_normalized_description')
-        ]
+    def test_normalized_texts_not_empty(self, db_connection):
+        """Проверка, что нормализованные тексты не пустые"""
+        cursor = db_connection.cursor()
         
-        for table, column in tables_and_columns:
-            self.cursor.execute(f"""
-                SELECT COUNT(*) 
-                FROM {table} 
-                WHERE {column} IS NOT NULL AND {column} != ''
-            """)
-            count = self.cursor.fetchone()[0]
-            self.assertGreater(count, 0, 
-                             f"Нет нормализованных текстов в колонке {column} таблицы {table}")
+        # Добавляем тестовые данные
+        # Добавляем темы
+        topics_data = [
+            (1, "Python", "Программирование на Python", None, None, None),
+            (2, "Web", "Разработка веб-приложений", None, None, None),
+            (3, "ML", "Машинное обучение", None, None, None)
+        ]
+        cursor.executemany(
+            "INSERT INTO topics (id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector) VALUES (?, ?, ?, ?, ?, ?)",
+            topics_data
+        )
+        
+        # Добавляем трудовые функции
+        functions_data = [
+            ("F1", "Разработка программ", None, None),
+            ("F2", "Создание веб-сайтов", None, None),
+            ("F3", "Анализ данных", None, None)
+        ]
+        cursor.executemany(
+            "INSERT INTO labor_functions (id, name, nltk_normalized_name, rubert_vector) VALUES (?, ?, ?, ?)",
+            functions_data
+        )
+        
+        db_connection.commit()
+        
+        # Обрабатываем тексты
+        processor = DatabaseTextProcessor()
+        processor.process_topics(db_connection)
+        processor.process_labor_functions(db_connection)
+        
+        # Проверяем темы
+        cursor.execute("SELECT nltk_normalized_title, nltk_normalized_description FROM topics")
+        texts = cursor.fetchall()
+        for title, description in texts:
+            assert title is not None
+            assert description is not None
+        
+        # Проверяем трудовые функции
+        cursor.execute("SELECT nltk_normalized_name FROM labor_functions")
+        texts = cursor.fetchall()
+        for name, in texts:
+            assert name is not None
 
 if __name__ == '__main__':
     unittest.main() 

@@ -8,6 +8,13 @@ import sys
 import pkg_resources
 import subprocess
 from pathlib import Path
+import argparse
+from src.text_processor import DatabaseTextProcessor
+from src.vectorizer import DatabaseVectorizer
+from src.data_loader import load_all_data
+from src.check_data import check_data
+from src.check_vectors import check_vectors
+from src.download_nltk_data import setup_nltk
 
 def check_dependencies():
     """Проверка и установка необходимых зависимостей"""
@@ -52,8 +59,32 @@ def setup_nltk():
             print(f"Загрузка {item} для NLTK...")
             nltk.download(item)
 
+def print_top_tfidf_similarities():
+    """Выводит топ-3 пар по tfidf_similarity"""
+    from src.db import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT t.title, lf.name, tl.tfidf_similarity, tl.rubert_similarity
+        FROM topic_labor_function tl
+        JOIN topics t ON t.id = tl.topic_id
+        JOIN labor_functions lf ON lf.id = tl.labor_function_id
+        ORDER BY tl.tfidf_similarity DESC
+        LIMIT 3
+    ''')
+    print("\nТоп-3 пары тема-функция по tfidf_similarity:")
+    for title, name, tfidf_sim, rubert_sim in cursor.fetchall():
+        print(f"Тема: {title}\nТрудовая функция: {name}\nTF-IDF similarity: {tfidf_sim:.4f}\nruBERT similarity: {rubert_sim:.4f}\n---")
+    conn.close()
+
 def main():
     """Основная функция запуска приложения"""
+    parser = argparse.ArgumentParser(description='Обработка и векторизация текстов')
+    parser.add_argument('--vectorizer', type=str, default='tfidf',
+                      help='Тип векторизатора (tfidf или rubert)')
+    parser.add_argument('--full-cycle', action='store_true', help='Выполнить полный цикл обработки')
+    args = parser.parse_args()
+    
     # Добавляем путь к src в PYTHONPATH
     src_path = str(Path(__file__).parent)
     if src_path not in sys.path:
@@ -68,10 +99,55 @@ def main():
         print("\nПроверка данных NLTK...")
         setup_nltk()
         
-        # Импортируем и запускаем основную логику
-        print("\nЗапуск основной логики приложения...")
-        from src.main import main as app_main
-        app_main()
+        # Загрузка данных
+        print("Загрузка данных...")
+        load_all_data()
+        
+        # Проверка данных
+        print("Проверка данных...")
+        check_data()
+        
+        # Обработка текстов
+        print("Обработка текстов...")
+        processor = DatabaseTextProcessor()
+        processor.process_all()
+        
+        if args.full_cycle:
+            # Векторизация TF-IDF
+            print("Векторизация с использованием tfidf...")
+            vectorizer = DatabaseVectorizer(vectorizer_type='tfidf')
+            vectorizer.vectorize_all()
+            
+            # Векторизация ruBERT
+            print("Векторизация с использованием rubert...")
+            vectorizer = DatabaseVectorizer(vectorizer_type='rubert')
+            vectorizer.vectorize_all()
+            
+            # Расчет сходства
+            print("Расчет сходства между темами и трудовыми функциями...")
+            from src.vectorizer import calculate_similarities
+            calculate_similarities()
+            
+            # Проверка векторов
+            print("Проверка векторов...")
+            check_vectors()
+            
+            # Вывод топ-3 по tfidf_similarity
+            print_top_tfidf_similarities()
+        else:
+            # Векторизация
+            print(f"Векторизация с использованием {args.vectorizer}...")
+            vectorizer = DatabaseVectorizer(vectorizer_type=args.vectorizer)
+            vectorizer.vectorize_all()
+            
+            # Расчет сходства
+            print("Расчет сходства между темами и трудовыми функциями...")
+            from src.vectorizer import calculate_similarities
+            calculate_similarities()
+            
+            # Проверка векторов
+            print("Проверка векторов...")
+            check_vectors()
         
     except Exception as e:
         print(f"\n❌ Ошибка: {str(e)}")

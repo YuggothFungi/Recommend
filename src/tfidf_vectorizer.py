@@ -69,7 +69,7 @@ class DatabaseVectorizer:
         cursor.execute("""
             SELECT 
                 lf.id,
-                COALESCE(lf.nltk_normalized_name, '') || ' ' || 
+                COALESCE(lf.nltk_normalized_name, '') || ' ' ||
                 GROUP_CONCAT(COALESCE(lc.nltk_normalized_description, ''), ' ')
             FROM labor_functions lf
             LEFT JOIN labor_function_components lfc ON lf.id = lfc.labor_function_id
@@ -86,9 +86,14 @@ class DatabaseVectorizer:
             VALUES (?, ?)
         """, (id_value, vector_bytes))
     
-    def vectorize_all(self):
+    def vectorize_all(self, conn=None):
         """Векторизация всех текстов"""
-        conn = get_db_connection()
+        if conn is None:
+            conn = get_db_connection()
+            should_close = True
+        else:
+            should_close = False
+            
         cursor = conn.cursor()
         
         # Получаем все тексты
@@ -127,7 +132,10 @@ class DatabaseVectorizer:
             self._save_vector(cursor, 'labor_function_vectors', 'labor_function_id', function_id, vector)
         
         conn.commit()
-        conn.close()
+        
+        if should_close:
+            conn.close()
+            
         print("Векторизация завершена!")
 
 if __name__ == "__main__":

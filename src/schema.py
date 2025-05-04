@@ -13,7 +13,8 @@ def init_db():
             title TEXT NOT NULL,
             description TEXT,
             nltk_normalized_title TEXT,
-            nltk_normalized_description TEXT
+            nltk_normalized_description TEXT,
+            rubert_vector BLOB
         )
     """)
     
@@ -24,7 +25,8 @@ def init_db():
             category TEXT NOT NULL,
             description TEXT,
             nltk_normalized_category TEXT,
-            nltk_normalized_description TEXT
+            nltk_normalized_description TEXT,
+            rubert_vector BLOB
         )
     """)
     
@@ -44,9 +46,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS labor_functions (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
-            description TEXT,
             nltk_normalized_name TEXT,
-            nltk_normalized_description TEXT
+            rubert_vector BLOB
         )
     """)
     
@@ -65,6 +66,7 @@ def init_db():
             component_type_id INTEGER,
             description TEXT,
             nltk_normalized_description TEXT,
+            rubert_vector BLOB,
             FOREIGN KEY (component_type_id) REFERENCES component_types(id)
         )
     """)
@@ -84,7 +86,8 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS topic_vectors (
             topic_id INTEGER PRIMARY KEY,
-            tfidf_vector BLOB NOT NULL,
+            tfidf_vector BLOB,
+            rubert_vector BLOB,
             FOREIGN KEY (topic_id) REFERENCES topics(id)
         )
     """)
@@ -93,7 +96,8 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS labor_function_vectors (
             labor_function_id TEXT PRIMARY KEY,
-            tfidf_vector BLOB NOT NULL,
+            tfidf_vector BLOB,
+            rubert_vector BLOB,
             FOREIGN KEY (labor_function_id) REFERENCES labor_functions(id)
         )
     """)
@@ -103,7 +107,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS topic_labor_function (
             topic_id INTEGER,
             labor_function_id TEXT,
-            cosine_similarity_score REAL,
+            tfidf_similarity REAL,
+            rubert_similarity REAL,
             PRIMARY KEY (topic_id, labor_function_id),
             FOREIGN KEY (topic_id) REFERENCES topics(id),
             FOREIGN KEY (labor_function_id) REFERENCES labor_functions(id)
@@ -119,14 +124,27 @@ def init_db():
     """)
     
     conn.commit()
-    conn.close()
+    return conn
 
 def reset_db():
     """Сброс базы данных"""
-    db_path = 'data/database.db'
-    if os.path.exists(db_path):
-        os.remove(db_path)
-    init_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Удаление всех таблиц
+    cursor.execute("DROP TABLE IF EXISTS topic_labor_function")
+    cursor.execute("DROP TABLE IF EXISTS topic_competency")
+    cursor.execute("DROP TABLE IF EXISTS labor_function_components")
+    cursor.execute("DROP TABLE IF EXISTS topic_vectors")
+    cursor.execute("DROP TABLE IF EXISTS labor_function_vectors")
+    cursor.execute("DROP TABLE IF EXISTS topics")
+    cursor.execute("DROP TABLE IF EXISTS competencies")
+    cursor.execute("DROP TABLE IF EXISTS labor_functions")
+    cursor.execute("DROP TABLE IF EXISTS labor_components")
+    cursor.execute("DROP TABLE IF EXISTS component_types")
+    
+    conn.commit()
+    return conn
 
 if __name__ == "__main__":
     reset_db() 

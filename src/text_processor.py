@@ -104,16 +104,21 @@ class DatabaseTextProcessor:
         conn.commit()
         conn.close()
     
-    def process_labor_functions(self):
+    def process_labor_functions(self, conn=None):
         """Обработка текстов трудовых функций"""
         print("Обработка трудовых функций...")
-        conn = get_db_connection()
+        if conn is None:
+            conn = get_db_connection()
+            should_close = True
+        else:
+            should_close = False
+            
         cursor = conn.cursor()
-        
         self._process_text(cursor, 'labor_functions', 'id', ['name'])
-        
         conn.commit()
-        conn.close()
+        
+        if should_close:
+            conn.close()
     
     def process_labor_components(self):
         """Обработка текстов компонентов трудовых функций"""
@@ -126,16 +131,21 @@ class DatabaseTextProcessor:
         conn.commit()
         conn.close()
     
-    def process_topics(self):
+    def process_topics(self, conn=None):
         """Обработка текстов тем"""
         print("Обработка тем...")
-        conn = get_db_connection()
+        if conn is None:
+            conn = get_db_connection()
+            should_close = True
+        else:
+            should_close = False
+            
         cursor = conn.cursor()
-        
         self._process_text(cursor, 'topics', 'id', ['title', 'description'])
-        
         conn.commit()
-        conn.close()
+        
+        if should_close:
+            conn.close()
     
     def process_all(self):
         """Обработка всех текстов"""

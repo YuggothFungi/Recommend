@@ -19,5 +19,16 @@ def download_nltk_resources():
         else:
             print(f"{resource} успешно загружен")
 
+def setup_nltk():
+    """Загрузка необходимых данных NLTK"""
+    try:
+        nltk.data.find('tokenizers/punkt')
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        print("Загрузка необходимых данных NLTK...")
+        nltk.download('punkt')
+        nltk.download('stopwords')
+        print("Загрузка завершена.")
+
 if __name__ == "__main__":
     download_nltk_resources() 
