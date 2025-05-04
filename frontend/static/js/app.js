@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td>${topic.name}</td>
                     <td>${topic.description || ''}</td>
                     <td>${topic.hours || '-'}</td>
-                    <td class="similarity">-</td>
+                    <td class="similarity">${typeof topic.similarity === 'number' ? topic.similarity.toFixed(2) : '-'}</td>
                 `;
                 tr.addEventListener('click', () => handleTopicClick(topic.id));
                 tbody.appendChild(tr);
@@ -152,9 +152,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>${topic.name}</td>
                 <td>${topic.description}</td>
                 <td>${topic.hours || '-'}</td>
-                <td class="similarity">-</td>
+                <td class="similarity">${typeof topic.similarity === 'number' ? topic.similarity.toFixed(2) : '-'}</td>
             `;
-            tr.addEventListener('click', () => handleTopicSelection(topic.id));
+            tr.addEventListener('click', () => handleTopicClick(topic.id));
             tbody.appendChild(tr);
         });
     }

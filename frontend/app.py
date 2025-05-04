@@ -128,7 +128,7 @@ def get_similarities():
     else:
         # Получаем релевантные темы для трудовой функции
         cursor.execute("""
-            SELECT t.id, t.name, tlf.rubert_similarity
+            SELECT t.id, t.title, t.description, t.hours, tlf.rubert_similarity
             FROM topic_labor_function tlf
             JOIN topics t ON t.id = tlf.topic_id
             WHERE tlf.labor_function_id = ? AND tlf.rubert_similarity >= ?
@@ -138,7 +138,9 @@ def get_similarities():
         results = [{
             "id": row[0],
             "name": row[1],
-            "similarity": row[2]
+            "description": row[2],
+            "hours": row[3],
+            "similarity": row[4]
         } for row in cursor.fetchall()]
         
         recommendations = []
