@@ -118,34 +118,52 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Функция обновления таблицы трудовых функций
     function updateFunctionsTable(results) {
-        console.log('Обновление таблицы функций:', results);
-        const rows = functionsTable.getElementsByTagName('tr');
-        console.log('Найдено строк в таблице:', rows.length);
-        
-        Array.from(rows).forEach(row => {
-            const id = row.dataset.id;
-            const similarityCell = row.cells[1];
-            const result = results.find(r => String(r.id) === id);
-            
-            console.log('Обработка строки:', { id, result });
-            
-            if (result) {
-                similarityCell.textContent = result.similarity.toFixed(2);
-                row.classList.add('highlighted');
-                console.log('Строка подсвечена:', id);
+        // Сортируем по similarity по убыванию, элементы без similarity внизу
+        const sortedResults = [...results].sort((a, b) => {
+            if (typeof b.similarity === 'number' && typeof a.similarity === 'number') {
+                return b.similarity - a.similarity;
+            } else if (typeof b.similarity === 'number') {
+                return 1;
+            } else if (typeof a.similarity === 'number') {
+                return -1;
             } else {
-                similarityCell.textContent = '-';
-                row.classList.remove('highlighted');
+                return 0;
             }
+        });
+        functionsTable.innerHTML = '';
+        sortedResults.forEach(func => {
+            const row = document.createElement('tr');
+            row.dataset.id = func.id;
+            row.innerHTML = `
+                <td>${func.name}</td>
+                <td>${typeof func.similarity === 'number' ? func.similarity.toFixed(2) : '-'}</td>
+            `;
+            // Подсвечиваем только выбранную функцию (голубым)
+            if (String(func.id) === String(selectedFunctionId)) {
+                row.classList.add('selected');
+            }
+            row.addEventListener('click', () => handleFunctionClick(func.id));
+            functionsTable.appendChild(row);
         });
     }
 
     // Функция обновления таблицы тем
     function updateTopicsTable(topics) {
+        // Сортируем по similarity по убыванию, элементы без similarity внизу
+        const sortedTopics = [...topics].sort((a, b) => {
+            if (typeof b.similarity === 'number' && typeof a.similarity === 'number') {
+                return b.similarity - a.similarity;
+            } else if (typeof b.similarity === 'number') {
+                return 1;
+            } else if (typeof a.similarity === 'number') {
+                return -1;
+            } else {
+                return 0;
+            }
+        });
         const tbody = document.querySelector('#topics-table tbody');
         tbody.innerHTML = '';
-        
-        topics.forEach(topic => {
+        sortedTopics.forEach(topic => {
             const tr = document.createElement('tr');
             tr.dataset.topicId = topic.id;
             tr.innerHTML = `
@@ -154,6 +172,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>${topic.hours || '-'}</td>
                 <td class="similarity">${typeof topic.similarity === 'number' ? topic.similarity.toFixed(2) : '-'}</td>
             `;
+            // Подсвечиваем только выбранную тему (голубым)
+            if (String(topic.id) === String(selectedTopicId)) {
+                tr.classList.add('selected');
+            }
             tr.addEventListener('click', () => handleTopicClick(topic.id));
             tbody.appendChild(tr);
         });
