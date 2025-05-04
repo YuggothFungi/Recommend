@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import glob
 
 # Добавляем корневую директорию в PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -99,72 +100,45 @@ def load_labor_functions():
     conn.close()
 
 def load_topics():
-    """Загрузка тем из файлов в директории curriculum_disciplines"""
+    """Загрузка тем из JSON файлов в базу данных"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Очищаем таблицы перед загрузкой
-    cursor.execute("DELETE FROM topic_competency")
-    cursor.execute("DELETE FROM topics")
+    # Очищаем таблицу тем
+    cursor.execute('DELETE FROM topics')
     
-    # Получаем список всех JSON файлов в директории
-    discipline_files = [f for f in os.listdir('input/curriculum_disciplines') 
-                       if f.endswith('.json')]
+    # Получаем все JSON файлы из директории
+    json_files = glob.glob('input/curriculum_disciplines/*.json')
     
-    for file_name in discipline_files:
-        with open(f'input/curriculum_disciplines/{file_name}', 'r', encoding='utf-8') as f:
+    for json_file in json_files:
+        with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-        # Определяем ключ рабочей программы (может быть с пробелом или без)
-        program_key = 'рабочая_программа' if 'рабочая_программа' in data else 'рабочая программа'
-        
-        # Получаем ID дисциплины
-        discipline_name = data['дисциплина']
-        cursor.execute("SELECT id FROM disciplines WHERE name = ?", (discipline_name,))
-        discipline_id = cursor.fetchone()[0]
+            # Определяем ключ для рабочей программы
+            program_key = 'рабочая_программа' if 'рабочая_программа' in data else 'рабочая программа'
             
-        # Загружаем темы из лекций и практических занятий
-        for semester in data[program_key]['семестры']:
-            for section in semester['разделы']:
-                # Загружаем темы лекций
-                for lecture in section['лекции']:
-                    cursor.execute("""
-                        INSERT INTO topics (discipline_id, title, description)
-                        VALUES (?, ?, ?)
-                    """, (
-                        discipline_id,
-                        lecture['тема'],
-                        section['содержание']  # Используем содержание раздела как описание
-                    ))
+            # Получаем название дисциплины
+            discipline_name = data['дисциплина']
+            
+            # Получаем ID дисциплины
+            cursor.execute('SELECT id FROM disciplines WHERE name = ?', (discipline_name,))
+            discipline_id = cursor.fetchone()[0]
+            
+            # Обрабатываем все семестры
+            for semester in data[program_key]['семестры']:
+                for section in semester['разделы']:
+                    # Суммируем часы из лекций и практических занятий
+                    total_hours = 0
+                    if 'лекции' in section:
+                        total_hours += sum(lecture['часы'] for lecture in section['лекции'])
+                    if 'практические' in section:
+                        total_hours += sum(practice['часы'] for practice in section['практические'])
                     
-                    topic_id = cursor.lastrowid
-                    
-                    # Создаем связи с компетенциями
-                    for comp_id in data[program_key]['компетенции']:
-                        cursor.execute("""
-                            INSERT INTO topic_competency (topic_id, competency_id)
-                            VALUES (?, ?)
-                        """, (topic_id, comp_id))
-                
-                # Загружаем темы практических занятий
-                for practice in section['практические']:
-                    cursor.execute("""
-                        INSERT INTO topics (discipline_id, title, description)
-                        VALUES (?, ?, ?)
-                    """, (
-                        discipline_id,
-                        practice['тема'],
-                        section['содержание']  # Используем содержание раздела как описание
-                    ))
-                    
-                    topic_id = cursor.lastrowid
-                    
-                    # Создаем связи с компетенциями
-                    for comp_id in data[program_key]['компетенции']:
-                        cursor.execute("""
-                            INSERT INTO topic_competency (topic_id, competency_id)
-                            VALUES (?, ?)
-                        """, (topic_id, comp_id))
+                    # Вставляем тему в базу данных
+                    cursor.execute('''
+                        INSERT INTO topics (discipline_id, title, description, hours)
+                        VALUES (?, ?, ?, ?)
+                    ''', (discipline_id, section['название'], section['содержание'], total_hours))
     
     conn.commit()
     conn.close()

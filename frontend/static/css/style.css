@@ -10,8 +10,8 @@ body {
 }
 
 .container {
-    max-width: 1200px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     padding: 20px;
     height: 100%;
     display: flex;
@@ -56,25 +56,33 @@ main {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-height: 0; /* Важно для правильной работы flex */
+    min-height: 0;
+    height: calc(100vh - 200px); /* Высота минус шапка и отступы */
 }
 
 .split-view {
     display: flex;
     gap: 20px;
     flex: 1;
-    min-height: 0; /* Важно для правильной работы flex */
+    min-height: 0;
 }
 
 .panel {
-    flex: 1;
     background-color: #fff;
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
-    min-height: 0; /* Важно для правильной работы flex */
+    min-height: 0;
+}
+
+.topics-panel {
+    flex: 0.6; /* 60% ширины */
+}
+
+.functions-panel {
+    flex: 0.4; /* 40% ширины */
 }
 
 .panel h2 {
@@ -85,12 +93,14 @@ main {
 .table-container {
     flex: 1;
     overflow: auto;
-    min-height: 0; /* Важно для правильной работы flex */
+    min-height: 0;
+    position: relative;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
 }
 
 th, td {
@@ -99,11 +109,22 @@ th, td {
     border-bottom: 1px solid #ddd;
 }
 
-th {
-    background-color: #f8f9fa;
+th:last-child, td:last-child {
     position: sticky;
-    top: 0;
+    right: 0;
+    background-color: #fff;
     z-index: 1;
+    width: 100px;
+    text-align: center;
+}
+
+th:last-child {
+    background-color: #f8f9fa;
+}
+
+td.similarity {
+    font-weight: bold;
+    color: #2196F3;
 }
 
 tr:hover {
@@ -124,7 +145,9 @@ tr.highlighted {
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-top: auto; /* Прижимаем к низу */
+    margin-top: auto;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 .recommendations-panel h2 {
@@ -152,8 +175,7 @@ tr.highlighted {
         flex-direction: column;
     }
     
-    .controls {
-        flex-direction: column;
-        align-items: stretch;
+    .topics-panel, .functions-panel {
+        flex: 1;
     }
 } 

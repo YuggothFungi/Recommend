@@ -29,6 +29,7 @@ def init_db():
             discipline_id INTEGER,
             title TEXT NOT NULL,
             description TEXT,
+            hours INTEGER,
             nltk_normalized_title TEXT,
             nltk_normalized_description TEXT,
             rubert_vector BLOB,
@@ -192,14 +193,14 @@ def update_schema():
             )
         """)
     
-    # Проверяем существование колонки discipline_id в таблице topics
+    # Проверяем существование колонки hours в таблице topics
     cursor.execute("""
         PRAGMA table_info(topics)
     """)
     columns = cursor.fetchall()
-    has_discipline_id = any(col[1] == 'discipline_id' for col in columns)
+    has_hours = any(col[1] == 'hours' for col in columns)
     
-    if not has_discipline_id:
+    if not has_hours:
         # Создаем временную таблицу с новой структурой
         cursor.execute("""
             CREATE TABLE topics_new (
@@ -207,6 +208,7 @@ def update_schema():
                 discipline_id INTEGER,
                 title TEXT NOT NULL,
                 description TEXT,
+                hours INTEGER,
                 nltk_normalized_title TEXT,
                 nltk_normalized_description TEXT,
                 rubert_vector BLOB,
@@ -216,8 +218,8 @@ def update_schema():
         
         # Копируем данные из старой таблицы
         cursor.execute("""
-            INSERT INTO topics_new (id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector)
-            SELECT id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector
+            INSERT INTO topics_new (id, discipline_id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector)
+            SELECT id, discipline_id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector
             FROM topics
         """)
         

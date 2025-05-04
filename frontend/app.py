@@ -36,25 +36,22 @@ def get_disciplines():
 def get_topics():
     """Получение тем по выбранной дисциплине"""
     discipline_id = request.args.get('discipline_id')
+    print(f"Получен запрос тем для дисциплины: {discipline_id}")
+    
     if not discipline_id:
-        return jsonify({"error": "discipline_id is required"}), 400
+        print("discipline_id не указан")
+        return jsonify([])
     
     conn = db.get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT id, title, description 
-        FROM topics 
+    cursor.execute('''
+        SELECT id, title, description, hours
+        FROM topics
         WHERE discipline_id = ?
-        ORDER BY title
-    """, (discipline_id,))
+    ''', (discipline_id,))
     
-    topics = [{
-        "id": row[0],
-        "title": row[1],
-        "description": row[2]
-    } for row in cursor.fetchall()]
-    
+    topics = [dict(zip(['id', 'name', 'description', 'hours'], row)) for row in cursor.fetchall()]
+    print(f"Найдено тем: {len(topics)}")
     conn.close()
     return jsonify(topics)
 
@@ -131,7 +128,7 @@ def get_similarities():
     else:
         # Получаем релевантные темы для трудовой функции
         cursor.execute("""
-            SELECT t.id, t.title, tlf.rubert_similarity
+            SELECT t.id, t.name, tlf.rubert_similarity
             FROM topic_labor_function tlf
             JOIN topics t ON t.id = tlf.topic_id
             WHERE tlf.labor_function_id = ? AND tlf.rubert_similarity >= ?
@@ -140,7 +137,7 @@ def get_similarities():
         
         results = [{
             "id": row[0],
-            "title": row[1],
+            "name": row[1],
             "similarity": row[2]
         } for row in cursor.fetchall()]
         

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Главный файл запуска приложения.
-Проверяет зависимости и запускает основную логику из src/main.py
+Проверяет зависимости и запускает основную логику из src/data_processor.py
 """
 
 import sys
@@ -16,6 +16,7 @@ from src.check_data import check_data
 from src.check_vectors import check_vectors
 from src.check_similarities import check_similarities
 from src.download_nltk_data import setup_nltk
+from src.data_processor import process_data
 
 def check_dependencies():
     """Проверка и установка необходимых зависимостей"""
@@ -100,43 +101,23 @@ def main():
         print("\nПроверка данных NLTK...")
         setup_nltk()
         
-        # Загрузка данных
-        print("Загрузка данных...")
-        load_all_data()
-        
-        # Проверка данных
-        print("Проверка данных...")
-        check_data()
-        
-        # Обработка текстов
-        print("Обработка текстов...")
-        processor = DatabaseTextProcessor()
-        processor.process_all()
-        
         if args.full_cycle:
-            # Векторизация TF-IDF
-            print("Векторизация с использованием tfidf...")
-            vectorizer = DatabaseVectorizer(vectorizer_type='tfidf')
-            vectorizer.vectorize_all()
-            
-            # Векторизация ruBERT
-            print("Векторизация с использованием rubert...")
-            vectorizer = DatabaseVectorizer(vectorizer_type='rubert')
-            vectorizer.vectorize_all()
-            
-            # Расчет сходства
-            print("Расчет сходства между темами и трудовыми функциями...")
-            from src.vectorizer import calculate_similarities
-            calculate_similarities()
-            
-            # Проверка векторов
-            print("Проверка векторов...")
-            check_vectors()
-            
-            # Проверка сходства
-            print("Проверка сходства...")
-            check_similarities()
+            # Запускаем полный цикл обработки данных
+            process_data()
         else:
+            # Загрузка данных
+            print("Загрузка данных...")
+            load_all_data()
+            
+            # Проверка данных
+            print("Проверка данных...")
+            check_data()
+            
+            # Обработка текстов
+            print("Обработка текстов...")
+            processor = DatabaseTextProcessor()
+            processor.process_all()
+            
             # Векторизация
             print(f"Векторизация с использованием {args.vectorizer}...")
             vectorizer = DatabaseVectorizer(vectorizer_type=args.vectorizer)

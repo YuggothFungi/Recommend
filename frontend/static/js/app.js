@@ -41,20 +41,27 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция загрузки тем по выбранной дисциплине
     async function loadTopics(disciplineId) {
         try {
+            console.log('Загрузка тем для дисциплины:', disciplineId);
             const response = await fetch(`/api/topics?discipline_id=${disciplineId}`);
+            console.log('Ответ от сервера:', response);
             const topics = await response.json();
+            console.log('Полученные темы:', topics);
             
             // Очищаем и заполняем таблицу тем
-            topicsTable.innerHTML = '';
+            const tbody = document.querySelector('#topics-table tbody');
+            tbody.innerHTML = '';
+            
             topics.forEach(topic => {
-                const row = document.createElement('tr');
-                row.dataset.id = topic.id;
-                row.innerHTML = `
-                    <td>${topic.title}</td>
+                const tr = document.createElement('tr');
+                tr.dataset.topicId = topic.id;
+                tr.innerHTML = `
+                    <td>${topic.name}</td>
                     <td>${topic.description || ''}</td>
+                    <td>${topic.hours || '-'}</td>
+                    <td class="similarity">-</td>
                 `;
-                row.addEventListener('click', () => handleTopicClick(topic.id));
-                topicsTable.appendChild(row);
+                tr.addEventListener('click', () => handleTopicClick(topic.id));
+                tbody.appendChild(tr);
             });
         } catch (error) {
             console.error('Ошибка при загрузке тем:', error);
@@ -90,8 +97,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = `/api/similarities?${type}_id=${id}&threshold=${threshold}`;
         
         try {
+            console.log('Загрузка сходства:', { id, type, threshold, url });
             const response = await fetch(url);
             const data = await response.json();
+            console.log('Полученные данные:', data);
             
             // Обновляем таблицу в зависимости от типа
             if (type === 'topic') {
@@ -109,15 +118,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Функция обновления таблицы трудовых функций
     function updateFunctionsTable(results) {
+        console.log('Обновление таблицы функций:', results);
         const rows = functionsTable.getElementsByTagName('tr');
+        console.log('Найдено строк в таблице:', rows.length);
+        
         Array.from(rows).forEach(row => {
             const id = row.dataset.id;
             const similarityCell = row.cells[1];
-            const result = results.find(r => r.id === parseInt(id));
+            const result = results.find(r => String(r.id) === id);
+            
+            console.log('Обработка строки:', { id, result });
             
             if (result) {
                 similarityCell.textContent = result.similarity.toFixed(2);
                 row.classList.add('highlighted');
+                console.log('Строка подсвечена:', id);
             } else {
                 similarityCell.textContent = '-';
                 row.classList.remove('highlighted');
@@ -126,20 +141,41 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Функция обновления таблицы тем
-    function updateTopicsTable(results) {
-        const rows = topicsTable.getElementsByTagName('tr');
-        Array.from(rows).forEach(row => {
-            const id = row.dataset.id;
-            const similarityCell = row.insertCell(2) || row.cells[2];
-            const result = results.find(r => r.id === parseInt(id));
-            
-            if (result) {
-                similarityCell.textContent = result.similarity.toFixed(2);
-                row.classList.add('highlighted');
-            } else {
-                similarityCell.textContent = '-';
-                row.classList.remove('highlighted');
-            }
+    function updateTopicsTable(topics) {
+        const tbody = document.querySelector('#topics-table tbody');
+        tbody.innerHTML = '';
+        
+        topics.forEach(topic => {
+            const tr = document.createElement('tr');
+            tr.dataset.topicId = topic.id;
+            tr.innerHTML = `
+                <td>${topic.name}</td>
+                <td>${topic.description}</td>
+                <td>${topic.hours || '-'}</td>
+                <td class="similarity">-</td>
+            `;
+            tr.addEventListener('click', () => handleTopicSelection(topic.id));
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updateSimilarities(similarities) {
+        // Обновляем значения сходства в таблице тем
+        const topicRows = document.querySelectorAll('#topics-table tbody tr');
+        topicRows.forEach(row => {
+            const similarityCell = row.querySelector('.similarity');
+            const topicId = parseInt(row.dataset.topicId);
+            const similarity = similarities.find(s => s.topic_id === topicId);
+            similarityCell.textContent = similarity ? similarity.score.toFixed(2) : '-';
+        });
+
+        // Обновляем значения сходства в таблице функций
+        const functionRows = document.querySelectorAll('#functions-table tbody tr');
+        functionRows.forEach(row => {
+            const similarityCell = row.querySelector('.similarity');
+            const functionId = parseInt(row.dataset.functionId);
+            const similarity = similarities.find(s => s.function_id === functionId);
+            similarityCell.textContent = similarity ? similarity.score.toFixed(2) : '-';
         });
     }
 
@@ -180,12 +216,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleTopicClick(topicId) {
         // Снимаем выделение с предыдущей выбранной темы
         if (selectedTopicId) {
-            const prevRow = topicsTable.querySelector(`tr[data-id="${selectedTopicId}"]`);
+            const prevRow = document.querySelector(`#topics-table tr[data-topic-id="${selectedTopicId}"]`);
             if (prevRow) prevRow.classList.remove('selected');
         }
         
         // Выделяем новую тему
-        const row = topicsTable.querySelector(`tr[data-id="${topicId}"]`);
+        const row = document.querySelector(`#topics-table tr[data-topic-id="${topicId}"]`);
         if (row) row.classList.add('selected');
         
         selectedTopicId = topicId;
