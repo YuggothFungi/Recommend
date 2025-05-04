@@ -14,6 +14,7 @@ from src.vectorizer import DatabaseVectorizer
 from src.data_loader import load_all_data
 from src.check_data import check_data
 from src.check_vectors import check_vectors
+from src.check_similarities import check_similarities
 from src.download_nltk_data import setup_nltk
 
 def check_dependencies():
@@ -132,8 +133,9 @@ def main():
             print("Проверка векторов...")
             check_vectors()
             
-            # Вывод топ-3 по tfidf_similarity
-            print_top_tfidf_similarities()
+            # Проверка сходства
+            print("Проверка сходства...")
+            check_similarities()
         else:
             # Векторизация
             print(f"Векторизация с использованием {args.vectorizer}...")
@@ -148,6 +150,10 @@ def main():
             # Проверка векторов
             print("Проверка векторов...")
             check_vectors()
+            
+            # Проверка сходства
+            print("Проверка сходства...")
+            check_similarities()
         
     except Exception as e:
         print(f"\n❌ Ошибка: {str(e)}")
