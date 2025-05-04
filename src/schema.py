@@ -6,15 +6,33 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Создание таблицы дисциплин
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS disciplines (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            competencies TEXT,
+            goals TEXT,
+            tasks TEXT,
+            nltk_normalized_name TEXT,
+            nltk_normalized_competencies TEXT,
+            nltk_normalized_goals TEXT,
+            nltk_normalized_tasks TEXT,
+            rubert_vector BLOB
+        )
+    """)
+    
     # Создание таблицы тем
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS topics (
             id INTEGER PRIMARY KEY,
+            discipline_id INTEGER,
             title TEXT NOT NULL,
             description TEXT,
             nltk_normalized_title TEXT,
             nltk_normalized_description TEXT,
-            rubert_vector BLOB
+            rubert_vector BLOB,
+            FOREIGN KEY (discipline_id) REFERENCES disciplines(id)
         )
     """)
     
@@ -138,6 +156,7 @@ def reset_db():
     cursor.execute("DROP TABLE IF EXISTS topic_vectors")
     cursor.execute("DROP TABLE IF EXISTS labor_function_vectors")
     cursor.execute("DROP TABLE IF EXISTS topics")
+    cursor.execute("DROP TABLE IF EXISTS disciplines")
     cursor.execute("DROP TABLE IF EXISTS competencies")
     cursor.execute("DROP TABLE IF EXISTS labor_functions")
     cursor.execute("DROP TABLE IF EXISTS labor_components")
@@ -146,5 +165,68 @@ def reset_db():
     conn.commit()
     return conn
 
+def update_schema():
+    """Обновление схемы базы данных"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Проверяем существование таблицы disciplines
+    cursor.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='disciplines'
+    """)
+    if not cursor.fetchone():
+        # Создаем таблицу дисциплин
+        cursor.execute("""
+            CREATE TABLE disciplines (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                competencies TEXT,
+                goals TEXT,
+                tasks TEXT,
+                nltk_normalized_name TEXT,
+                nltk_normalized_competencies TEXT,
+                nltk_normalized_goals TEXT,
+                nltk_normalized_tasks TEXT,
+                rubert_vector BLOB
+            )
+        """)
+    
+    # Проверяем существование колонки discipline_id в таблице topics
+    cursor.execute("""
+        PRAGMA table_info(topics)
+    """)
+    columns = cursor.fetchall()
+    has_discipline_id = any(col[1] == 'discipline_id' for col in columns)
+    
+    if not has_discipline_id:
+        # Создаем временную таблицу с новой структурой
+        cursor.execute("""
+            CREATE TABLE topics_new (
+                id INTEGER PRIMARY KEY,
+                discipline_id INTEGER,
+                title TEXT NOT NULL,
+                description TEXT,
+                nltk_normalized_title TEXT,
+                nltk_normalized_description TEXT,
+                rubert_vector BLOB,
+                FOREIGN KEY (discipline_id) REFERENCES disciplines(id)
+            )
+        """)
+        
+        # Копируем данные из старой таблицы
+        cursor.execute("""
+            INSERT INTO topics_new (id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector)
+            SELECT id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector
+            FROM topics
+        """)
+        
+        # Удаляем старую таблицу и переименовываем новую
+        cursor.execute("DROP TABLE topics")
+        cursor.execute("ALTER TABLE topics_new RENAME TO topics")
+    
+    conn.commit()
+    return conn
+
 if __name__ == "__main__":
-    reset_db() 
+    update_schema() 

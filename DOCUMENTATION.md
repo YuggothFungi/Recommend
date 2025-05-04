@@ -143,3 +143,30 @@ python -m src.check_normalized_texts
 | `topic_competency` | Связь тем и компетенций |
 | `labor_function_components` | Связь функций и компонентов |
 | `topic_labor_function` | Результаты сопоставления (сходство) |
+
+## Структура базы данных
+
+### Таблицы
+
+#### disciplines
+Таблица для хранения информации о дисциплинах.
+- `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор дисциплины
+- `name` (TEXT, NOT NULL) - название дисциплины
+- `competencies` (TEXT) - компетенции дисциплины
+- `goals` (TEXT) - цели дисциплины
+- `tasks` (TEXT) - задачи дисциплины
+- `nltk_normalized_name` (TEXT) - нормализованное название дисциплины
+- `nltk_normalized_competencies` (TEXT) - нормализованные компетенции
+- `nltk_normalized_goals` (TEXT) - нормализованные цели
+- `nltk_normalized_tasks` (TEXT) - нормализованные задачи
+- `rubert_vector` (BLOB) - векторное представление дисциплины
+
+#### topics
+Таблица для хранения тем дисциплин.
+- `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор темы
+- `discipline_id` (INTEGER, FOREIGN KEY) - ссылка на дисциплину
+- `title` (TEXT, NOT NULL) - название темы
+- `description` (TEXT) - описание темы
+- `nltk_normalized_title` (TEXT) - нормализованное название темы
+- `nltk_normalized_description` (TEXT) - нормализованное описание темы
+- `rubert_vector` (BLOB) - векторное представление темы

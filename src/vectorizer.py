@@ -57,9 +57,9 @@ class DatabaseVectorizer:
         else:
             raise ValueError(f"Неизвестный тип векторизатора: {vectorizer_type}")
     
-    def vectorize_all(self) -> None:
+    def vectorize_all(self, conn=None) -> None:
         """Векторизация всех текстов"""
-        self.vectorizer.vectorize_all()
+        self.vectorizer.vectorize_all(conn)
     
     def get_meta(self) -> Dict[str, Any]:
         """Получение метаданных векторизатора"""

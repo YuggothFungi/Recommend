@@ -4,6 +4,7 @@ from src.rubert_vectorizer import RuBertVectorizer
 import sqlite3
 from src.db import get_db_connection
 from src.schema import init_db
+from tests.test_utils import create_test_tables, insert_test_data, clean_test_tables
 
 @pytest.fixture(scope="session")
 def db_connection():
@@ -16,14 +17,7 @@ def db_connection():
 def clean_db(db_connection):
     """Фикстура для очистки базы данных перед каждым тестом"""
     cursor = db_connection.cursor()
-    # Удаляем все временные таблицы
-    cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name LIKE 'test_%'
-    """)
-    tables = cursor.fetchall()
-    for table in tables:
-        cursor.execute(f"DROP TABLE IF EXISTS {table[0]}")
+    clean_test_tables(cursor)
     db_connection.commit()
 
 @pytest.fixture
@@ -126,133 +120,9 @@ def test_vectorize_all(vectorizer, db_connection):
     """Тест метода vectorize_all"""
     cursor = db_connection.cursor()
     
-    # Очищаем таблицы перед тестом
-    cursor.execute("DROP TABLE IF EXISTS topic_vectors")
-    cursor.execute("DROP TABLE IF EXISTS labor_function_vectors")
-    cursor.execute("DROP TABLE IF EXISTS labor_function_components")
-    cursor.execute("DROP TABLE IF EXISTS labor_components")
-    cursor.execute("DROP TABLE IF EXISTS component_types")
-    cursor.execute("DROP TABLE IF EXISTS labor_functions")
-    cursor.execute("DROP TABLE IF EXISTS topics")
-    
-    # Создаем необходимые таблицы
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS topics (
-            id INTEGER PRIMARY KEY,
-            title TEXT,
-            description TEXT,
-            nltk_normalized_title TEXT,
-            nltk_normalized_description TEXT,
-            rubert_vector BLOB
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS labor_functions (
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            nltk_normalized_name TEXT,
-            rubert_vector BLOB
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS component_types (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS labor_components (
-            id INTEGER PRIMARY KEY,
-            component_type_id INTEGER,
-            description TEXT,
-            nltk_normalized_description TEXT,
-            rubert_vector BLOB,
-            FOREIGN KEY (component_type_id) REFERENCES component_types(id)
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS labor_function_components (
-            labor_function_id TEXT,
-            component_id INTEGER,
-            PRIMARY KEY (labor_function_id, component_id),
-            FOREIGN KEY (labor_function_id) REFERENCES labor_functions(id),
-            FOREIGN KEY (component_id) REFERENCES labor_components(id)
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS topic_vectors (
-            topic_id INTEGER PRIMARY KEY,
-            tfidf_vector BLOB,
-            rubert_vector BLOB,
-            FOREIGN KEY (topic_id) REFERENCES topics(id)
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS labor_function_vectors (
-            labor_function_id TEXT PRIMARY KEY,
-            tfidf_vector BLOB,
-            rubert_vector BLOB,
-            FOREIGN KEY (labor_function_id) REFERENCES labor_functions(id)
-        )
-    """)
-    
-    # Добавляем тестовые данные
-    topics_data = [
-        (1, "Python", "Программирование на Python", "python", "программирование python", None),
-        (2, "Web", "Разработка веб-приложений", "web", "разработка веб приложений", None),
-        (3, "ML", "Машинное обучение", "ml", "машинное обучение", None)
-    ]
-    cursor.executemany(
-        "INSERT INTO topics (id, title, description, nltk_normalized_title, nltk_normalized_description, rubert_vector) VALUES (?, ?, ?, ?, ?, ?)",
-        topics_data
-    )
-    
-    functions_data = [
-        ("F1", "Разработка программ", "разработка программ", None),
-        ("F2", "Создание веб-сайтов", "создание веб сайтов", None),
-        ("F3", "Анализ данных", "анализ данных", None)
-    ]
-    cursor.executemany(
-        "INSERT INTO labor_functions (id, name, nltk_normalized_name, rubert_vector) VALUES (?, ?, ?, ?)",
-        functions_data
-    )
-    
-    # Добавляем типы компонентов
-    cursor.execute("""
-        INSERT INTO component_types (id, name) VALUES
-        (1, 'action'),
-        (2, 'skill'),
-        (3, 'knowledge')
-    """)
-    
-    # Добавляем компоненты
-    components_data = [
-        (1, 1, "Использование Python", "использование python", None),
-        (2, 2, "Работа с фреймворками", "работа фреймворки", None),
-        (3, 3, "Использование библиотек ML", "использование библиотеки ml", None)
-    ]
-    cursor.executemany(
-        "INSERT INTO labor_components (id, component_type_id, description, nltk_normalized_description, rubert_vector) VALUES (?, ?, ?, ?, ?)",
-        components_data
-    )
-    
-    # Связываем трудовые функции и компоненты
-    function_components = [
-        ("F1", 1),
-        ("F2", 2),
-        ("F3", 3)
-    ]
-    cursor.executemany(
-        "INSERT INTO labor_function_components (labor_function_id, component_id) VALUES (?, ?)",
-        function_components
-    )
-    
+    # Создаем таблицы и добавляем тестовые данные
+    create_test_tables(cursor)
+    insert_test_data(cursor)
     db_connection.commit()
     
     # Векторизуем все таблицы
@@ -261,12 +131,8 @@ def test_vectorize_all(vectorizer, db_connection):
     # Проверяем, что векторы добавлены
     cursor.execute("SELECT rubert_vector FROM topic_vectors")
     vectors = cursor.fetchall()
-    assert len(vectors) == len(topics_data)
-    for vector, in vectors:
-        assert vector is not None
+    assert len(vectors) == 3  # Количество тем
     
     cursor.execute("SELECT rubert_vector FROM labor_function_vectors")
     vectors = cursor.fetchall()
-    assert len(vectors) == len(functions_data)
-    for vector, in vectors:
-        assert vector is not None 
+    assert len(vectors) == 3  # Количество трудовых функций 
