@@ -7,8 +7,70 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h1>Рекомендательная система</h1>
-    <p>Здесь будет интерфейс для работы с данными.</p>
+    <div class="container">
+        <header>
+            <h1>Рекомендательная система</h1>
+            <div class="controls">
+                <div class="discipline-select">
+                    <label for="discipline">Дисциплина:</label>
+                    <select id="discipline">
+                        <option value="">Выберите дисциплину...</option>
+                    </select>
+                </div>
+                <div class="similarity-threshold">
+                    <label for="threshold">Порог сходства:</label>
+                    <input type="range" id="threshold" min="0" max="100" value="50" step="5">
+                    <span id="threshold-value">0.50</span>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="split-view">
+                <div class="panel topics-panel">
+                    <h2>Темы</h2>
+                    <div class="table-container">
+                        <table id="topics-table">
+                            <thead>
+                                <tr>
+                                    <th>Название темы</th>
+                                    <th>Описание</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Темы будут добавлены через JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="panel functions-panel">
+                    <h2>Трудовые функции</h2>
+                    <div class="table-container">
+                        <table id="functions-table">
+                            <thead>
+                                <tr>
+                                    <th>Название функции</th>
+                                    <th>Сходство</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Трудовые функции будут добавлены через JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="recommendations-panel">
+                <h2>Рекомендации</h2>
+                <div id="recommendations">
+                    <!-- Рекомендации будут добавлены через JavaScript -->
+                </div>
+            </div>
+        </main>
+    </div>
+
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html> 

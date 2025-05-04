@@ -1,10 +1,159 @@
+/* Общие стили */
 body {
-    font-family: Arial, sans-serif;
     margin: 0;
-    padding: 20px;
-    background-color: #f4f4f4;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f5f5f5;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
-h1 {
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Шапка */
+header {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+header h1 {
+    margin: 0 0 20px 0;
     color: #333;
+}
+
+.controls {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.discipline-select, .similarity-threshold {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+select, input[type="range"] {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Основной контент */
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 0; /* Важно для правильной работы flex */
+}
+
+.split-view {
+    display: flex;
+    gap: 20px;
+    flex: 1;
+    min-height: 0; /* Важно для правильной работы flex */
+}
+
+.panel {
+    flex: 1;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Важно для правильной работы flex */
+}
+
+.panel h2 {
+    margin: 0 0 20px 0;
+    color: #333;
+}
+
+.table-container {
+    flex: 1;
+    overflow: auto;
+    min-height: 0; /* Важно для правильной работы flex */
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+tr:hover {
+    background-color: #f5f5f5;
+}
+
+tr.selected {
+    background-color: #e3f2fd;
+}
+
+tr.highlighted {
+    background-color: #fff3e0;
+}
+
+/* Блок рекомендаций */
+.recommendations-panel {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-top: auto; /* Прижимаем к низу */
+}
+
+.recommendations-panel h2 {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+#recommendations {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+#recommendations div {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+#recommendations div:last-child {
+    border-bottom: none;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .split-view {
+        flex-direction: column;
+    }
+    
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
 } 

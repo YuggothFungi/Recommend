@@ -1,5 +1,10 @@
 import json
 import os
+import sys
+
+# Добавляем корневую директорию в PYTHONPATH
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.db import get_db_connection
 from src.schema import init_db
 
@@ -112,6 +117,11 @@ def load_topics():
             
         # Определяем ключ рабочей программы (может быть с пробелом или без)
         program_key = 'рабочая_программа' if 'рабочая_программа' in data else 'рабочая программа'
+        
+        # Получаем ID дисциплины
+        discipline_name = data['дисциплина']
+        cursor.execute("SELECT id FROM disciplines WHERE name = ?", (discipline_name,))
+        discipline_id = cursor.fetchone()[0]
             
         # Загружаем темы из лекций и практических занятий
         for semester in data[program_key]['семестры']:
@@ -119,9 +129,10 @@ def load_topics():
                 # Загружаем темы лекций
                 for lecture in section['лекции']:
                     cursor.execute("""
-                        INSERT INTO topics (title, description)
-                        VALUES (?, ?)
+                        INSERT INTO topics (discipline_id, title, description)
+                        VALUES (?, ?, ?)
                     """, (
+                        discipline_id,
                         lecture['тема'],
                         section['содержание']  # Используем содержание раздела как описание
                     ))
@@ -138,9 +149,10 @@ def load_topics():
                 # Загружаем темы практических занятий
                 for practice in section['практические']:
                     cursor.execute("""
-                        INSERT INTO topics (title, description)
-                        VALUES (?, ?)
+                        INSERT INTO topics (discipline_id, title, description)
+                        VALUES (?, ?, ?)
                     """, (
+                        discipline_id,
                         practice['тема'],
                         section['содержание']  # Используем содержание раздела как описание
                     ))
@@ -153,6 +165,34 @@ def load_topics():
                             INSERT INTO topic_competency (topic_id, competency_id)
                             VALUES (?, ?)
                         """, (topic_id, comp_id))
+    
+    conn.commit()
+    conn.close()
+
+def load_disciplines():
+    """Загрузка дисциплин из файлов в директории curriculum_disciplines"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Очищаем таблицу перед загрузкой
+    cursor.execute("DELETE FROM disciplines")
+    
+    # Получаем список всех JSON файлов в директории
+    discipline_files = [f for f in os.listdir('input/curriculum_disciplines') 
+                       if f.endswith('.json')]
+    
+    for file_name in discipline_files:
+        with open(f'input/curriculum_disciplines/{file_name}', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+        # Получаем название дисциплины
+        discipline_name = data['дисциплина']
+        
+        # Вставляем дисциплину в базу данных
+        cursor.execute("""
+            INSERT INTO disciplines (name) 
+            VALUES (?)
+        """, (discipline_name,))
     
     conn.commit()
     conn.close()
@@ -170,6 +210,9 @@ def load_all_data():
     
     print("Загрузка тем...")
     load_topics()
+    
+    print("Загрузка дисциплин...")
+    load_disciplines()
     
     print("Загрузка данных завершена!")
 
