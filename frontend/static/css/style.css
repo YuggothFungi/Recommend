@@ -178,4 +178,13 @@ tr.highlighted {
     .topics-panel, .functions-panel {
         flex: 1;
     }
+}
+
+.low-similarity {
+    background-color: #ffe6ea !important;
+}
+
+.recommendation-warning {
+    background-color: #ffe6ea !important;
+    color: #b71c1c;
 } 

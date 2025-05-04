@@ -102,11 +102,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
             console.log('Полученные данные:', data);
             
+            // Проверяем наличие рекомендации
+            let highlightAllLow = false;
+            if (data.recommendations && data.recommendations.some(r => r.includes('Тема не обеспечивает трудовые функции'))) {
+                highlightAllLow = true;
+            }
+            
             // Обновляем таблицу в зависимости от типа
             if (type === 'topic') {
                 updateFunctionsTable(data.results);
             } else {
-                updateTopicsTable(data.results);
+                updateTopicsTable(data.results, highlightAllLow);
             }
             
             // Обновляем рекомендации
@@ -142,13 +148,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (String(func.id) === String(selectedFunctionId)) {
                 row.classList.add('selected');
             }
+            // Бледно-розовая подсветка для низкого similarity или его отсутствия
+            if (typeof func.similarity !== 'number' || func.similarity < 0.1) {
+                row.classList.add('low-similarity');
+            }
             row.addEventListener('click', () => handleFunctionClick(func.id));
             functionsTable.appendChild(row);
         });
     }
 
     // Функция обновления таблицы тем
-    function updateTopicsTable(topics) {
+    function updateTopicsTable(topics, highlightAllLow = false) {
         // Сортируем по similarity по убыванию, элементы без similarity внизу
         const sortedTopics = [...topics].sort((a, b) => {
             if (typeof b.similarity === 'number' && typeof a.similarity === 'number') {
@@ -175,6 +185,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Подсвечиваем только выбранную тему (голубым)
             if (String(topic.id) === String(selectedTopicId)) {
                 tr.classList.add('selected');
+            }
+            // Бледно-розовая подсветка для низкого similarity или его отсутствия, либо если highlightAllLow=true
+            if (highlightAllLow || typeof topic.similarity !== 'number' || topic.similarity < 0.1) {
+                tr.classList.add('low-similarity');
             }
             tr.addEventListener('click', () => handleTopicClick(topic.id));
             tbody.appendChild(tr);
@@ -207,6 +221,9 @@ document.addEventListener('DOMContentLoaded', function() {
         recommendations.forEach(rec => {
             const div = document.createElement('div');
             div.textContent = rec;
+            if (rec.includes('Тема не обеспечивает трудовые функции')) {
+                div.classList.add('recommendation-warning');
+            }
             recommendationsDiv.appendChild(div);
         });
     }
