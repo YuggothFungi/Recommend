@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const thresholdSlider = document.getElementById('threshold');
     const thresholdValue = document.getElementById('threshold-value');
     const similarityTypeSelect = document.getElementById('similarity-type');
+    const configurationSelect = document.getElementById('configuration-id');
     const topicsTable = document.getElementById('topics-table').getElementsByTagName('tbody')[0];
     const functionsTable = document.getElementById('functions-table').getElementsByTagName('tbody')[0];
     const recommendationsDiv = document.getElementById('recommendations');
@@ -20,6 +21,13 @@ document.addEventListener('DOMContentLoaded', function() {
     disciplineSelect.addEventListener('change', handleDisciplineChange);
     thresholdSlider.addEventListener('input', handleThresholdChange);
     similarityTypeSelect.addEventListener('change', handleSimilarityTypeChange);
+    configurationSelect.addEventListener('change', () => {
+        log('Изменена конфигурация:', configurationSelect.value);
+        // Если выбрана тема, обновить таблицу функций
+        if (selectedTopicId) {
+            loadSimilarities(selectedTopicId);
+        }
+    });
 
     // Функция для логирования
     function log(message, data = null) {
@@ -99,67 +107,172 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Функция загрузки сходства и рекомендаций
+    // Функция загрузки конфигураций
+    async function loadConfigurations() {
+        try {
+            log('Загрузка конфигураций...');
+            const response = await fetch('/api/configurations');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const configs = await response.json();
+            log('Полученные конфигурации:', configs);
+            configurationSelect.innerHTML = '';
+            configs.forEach(cfg => {
+                const option = document.createElement('option');
+                option.value = cfg.id;
+                option.textContent = cfg.name;
+                option.title = cfg.description || '';
+                configurationSelect.appendChild(option);
+            });
+            if (configs.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'Нет конфигураций';
+                configurationSelect.appendChild(option);
+            }
+        } catch (error) {
+            log('Ошибка при загрузке конфигураций:', error);
+            configurationSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+        }
+    }
+
+    // Функция загрузки сходства и подходящих трудовых функций
     async function loadSimilarities(topicId) {
         try {
             const threshold = thresholdSlider.value / 100;
             const similarityType = similarityTypeSelect.value;
-            
-            log('Загрузка сходства для темы:', { topicId, threshold, similarityType });
-            const response = await fetch(`/api/similarities?topic_id=${topicId}&threshold=${threshold}&similarity_type=${similarityType}`);
+            const configurationId = configurationSelect.value;
+            log('Загрузка сходства для темы:', { topicId, threshold, similarityType, configurationId });
+            const response = await fetch(`/api/similarities?topic_id=${topicId}&threshold=${threshold}&similarity_type=${similarityType}&configuration_id=${configurationId}`);
             log('Ответ от сервера:', response);
-            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
             const data = await response.json();
             log('Полученные данные о сходстве:', data);
-            
-            let recommendations = data.recommendations || [];
-            
-            if (!data.similarities || data.similarities.length === 0) {
-                recommendations = ['Для выбранной трудовой функции нет подходящих тем'];
-            } else if (data.recommendations && data.recommendations.some(r => r.includes('Тема не обеспечивает трудовые функции'))) {
-                recommendations = ['Тема не обеспечивает трудовые функции'];
+            // Обновляем таблицу функций только подходящими функциями
+            if (data.functions && Array.isArray(data.functions)) {
+                updateFunctionsTable(data.functions);
+            } else {
+                updateFunctionsTable([]);
             }
-            
-            updateRecommendations(recommendations);
         } catch (error) {
             log('Ошибка при загрузке сходства:', error);
             alert('Ошибка при загрузке сходства');
         }
     }
 
-    // Функция обновления таблицы трудовых функций
+    // Обработчик клика по строке функции
+    functionsTable.onclick = function(event) {
+        const row = event.target.closest('tr');
+        if (!row) return;
+        // Получаем имя функции из первой ячейки
+        const nameCell = row.cells[0];
+        if (!nameCell) return;
+        // Находим id функции по имени (можно добавить data-id в строку при генерации)
+        const funcName = nameCell.textContent;
+        // Найти id функции по текущему списку (лучше добавить data-id при генерации)
+        let funcId = null;
+        for (const func of lastFunctionsList) {
+            if (func.name === funcName) {
+                funcId = func.id;
+                break;
+            }
+        }
+        if (!funcId) return;
+        selectedFunctionId = funcId;
+        selectedTopicId = null;
+        loadTopicsByFunction(funcId);
+    };
+
+    // Храним последний список функций для поиска id
+    let lastFunctionsList = [];
+
+    // Модифицируем updateFunctionsTable для выделения выбранной строки и дефиса в сходстве
     function updateFunctionsTable(functions) {
         log('Обновление таблицы трудовых функций:', functions);
         functionsTable.innerHTML = '';
+        lastFunctionsList = functions;
+        if (!functions || functions.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td colspan="2" style="text-align:center; color:#888;">Нет подходящих функций</td>`;
+            functionsTable.appendChild(row);
+            return;
+        }
         functions.forEach(func => {
             const row = document.createElement('tr');
+            row.dataset.id = func.id;
             row.innerHTML = `
                 <td style="width: 100%; white-space: normal;">${func.name}</td>
-                <td style="min-width: 60px; max-width: 80px;">-</td>
+                <td style="min-width: 60px; max-width: 80px;">${selectedFunctionId === func.id ? '-' : (typeof func.similarity === 'number' ? func.similarity.toFixed(2) : '-')}</td>
             `;
+            if (selectedFunctionId === func.id) row.classList.add('selected');
+            row.onclick = () => {
+                selectedFunctionId = func.id;
+                selectedTopicId = null;
+                // Снимаем выделение со всех строк
+                Array.from(functionsTable.children).forEach(r => r.classList.remove('selected'));
+                row.classList.add('selected');
+                loadTopicsByFunction(func.id);
+            };
             functionsTable.appendChild(row);
         });
     }
 
-    // Функция обновления таблицы тем
-    function updateTopicsTable(topics) {
+    // Функция загрузки тем по выбранной функции
+    async function loadTopicsByFunction(functionId) {
+        try {
+            const threshold = thresholdSlider.value / 100;
+            const similarityType = similarityTypeSelect.value;
+            const configurationId = configurationSelect.value;
+            log('Загрузка тем для функции:', { functionId, threshold, similarityType, configurationId });
+            const response = await fetch(`/api/similarities?labor_function_id=${functionId}&threshold=${threshold}&similarity_type=${similarityType}&configuration_id=${configurationId}`);
+            log('Ответ от сервера:', response);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            log('Полученные темы по функции:', data);
+            if (data.topics && Array.isArray(data.topics)) {
+                updateTopicsTable(data.topics, true);
+            } else {
+                updateTopicsTable([]);
+            }
+        } catch (error) {
+            log('Ошибка при загрузке тем по функции:', error);
+            alert('Ошибка при загрузке тем по функции');
+        }
+    }
+
+    // Модифицируем updateTopicsTable для выделения выбранной строки, дефиса в сходстве и отображения hours
+    function updateTopicsTable(topics, showSimilarity = false) {
         log('Обновление таблицы тем:', topics);
-        // Очищаем только тело таблицы (tbody)
         topicsTable.innerHTML = '';
-        // Добавляем все темы без фильтрации
+        if (!topics || topics.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td colspan="4" style="text-align:center; color:#888;">Нет подходящих тем</td>`;
+            topicsTable.appendChild(row);
+            return;
+        }
         topics.forEach(topic => {
             const row = document.createElement('tr');
+            row.dataset.id = topic.id;
             row.innerHTML = `
-                <td style="min-width: 40px; max-width: 60px;">${topic.type === 'lecture' ? 'Л' : 'П'}</td>
+                <td style="min-width: 40px; max-width: 60px;">${topic.type === 'lecture' ? 'Л' : (topic.type === 'practical' ? 'П' : '')}</td>
                 <td style="width: 100%; white-space: normal;">${topic.name}</td>
                 <td style="min-width: 40px; max-width: 60px;">${topic.hours !== null && topic.hours !== undefined ? topic.hours : '-'}</td>
-                <td style="min-width: 60px; max-width: 80px;">-</td>
+                <td style="min-width: 60px; max-width: 80px;">${selectedTopicId === topic.id ? '-' : (showSimilarity && typeof topic.similarity === 'number' ? topic.similarity.toFixed(2) : '-')}</td>
             `;
-            row.onclick = () => loadSimilarities(topic.id);
+            if (selectedTopicId === topic.id) row.classList.add('selected');
+            row.onclick = () => {
+                selectedTopicId = topic.id;
+                selectedFunctionId = null;
+                // Снимаем выделение со всех строк
+                Array.from(topicsTable.children).forEach(r => r.classList.remove('selected'));
+                row.classList.add('selected');
+                loadSimilarities(topic.id);
+            };
             topicsTable.appendChild(row);
         });
     }
@@ -264,5 +377,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Инициализация
     log('Инициализация приложения...');
+    loadConfigurations();
     loadDisciplines();
 }); 

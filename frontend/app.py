@@ -122,58 +122,91 @@ def get_labor_functions():
 def get_similarities():
     try:
         topic_id = request.args.get('topic_id')
+        labor_function_id = request.args.get('labor_function_id')
         similarity_type = request.args.get('similarity_type', 'rubert')
-        logger.debug(f"Получение сходства для темы {topic_id}, тип: {similarity_type}")
+        threshold = float(request.args.get('threshold', 0.0))
+        configuration_id = request.args.get('configuration_id')
+        logger.debug(f"Получение сходства: topic_id={topic_id}, labor_function_id={labor_function_id}, тип={similarity_type}, порог={threshold}, конфигурация={configuration_id}")
         
-        if not topic_id:
-            logger.warning("Не указан ID темы")
-            return jsonify({'error': 'Topic ID is required'}), 400
+        if not configuration_id:
+            logger.warning("Не указан ID конфигурации")
+            return jsonify({'error': 'Configuration ID is required'}), 400
+        if not (topic_id or labor_function_id):
+            logger.warning("Не указан ни topic_id, ни labor_function_id")
+            return jsonify({'error': 'Topic ID or Labor Function ID is required'}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Получаем сходства
-        cursor.execute('''
-            SELECT lf.id, lf.name, sr.similarity_score
-            FROM labor_functions lf
-            LEFT JOIN similarity_results sr ON sr.labor_function_id = lf.id 
-            AND sr.topic_id = ? AND sr.similarity_type = ?
-            WHERE lf.discipline_id = (
-                SELECT discipline_id FROM (
-                    SELECT discipline_id FROM lecture_topics WHERE id = ?
-                    UNION
-                    SELECT discipline_id FROM practical_topics WHERE id = ?
-                )
-            )
-        ''', (topic_id, similarity_type, topic_id, topic_id))
-        
-        similarities = [{'id': row['id'], 'name': row['name'], 'similarity': row['similarity_score']} for row in cursor.fetchall()]
-        logger.debug(f"Найдено сходств: {len(similarities)}")
-        
-        # Получаем рекомендации
-        recommendations = []
-        if similarities:
-            avg_similarity = sum(s['similarity'] for s in similarities if s['similarity'] is not None) / len(similarities)
-            logger.debug(f"Среднее сходство: {avg_similarity}")
-            
-            if avg_similarity < 0.3:
-                recommendations.append("Тема не обеспечивает трудовые функции")
-            elif avg_similarity < 0.5:
-                recommendations.append("Рекомендуется уделить больше времени для изучения темы")
-            elif avg_similarity < 0.7:
-                recommendations.append("Возможно требуется перефразирование темы для лучшего текстового сходства")
-            else:
-                recommendations.append("Тема хорошо удовлетворяет трудовым функциям")
+        similarity_field = f"{similarity_type}_similarity"
+        result = []
+        if topic_id:
+            # Отбор функций по теме
+            cursor.execute(f'''
+                SELECT lf.id, lf.name, MAX(sr.{similarity_field}) as similarity
+                FROM similarity_results sr
+                JOIN labor_functions lf ON lf.id = sr.labor_function_id
+                WHERE sr.topic_id = ?
+                  AND sr.configuration_id = ?
+                  AND sr.{similarity_field} > ?
+                GROUP BY lf.id, lf.name
+                ORDER BY similarity DESC
+            ''', (topic_id, configuration_id, threshold))
+            for row in cursor.fetchall():
+                result.append({
+                    'id': row['id'],
+                    'name': row['name'],
+                    'similarity': row['similarity']
+                })
+            logger.debug(f"Найдено уникальных функций с подходящим сходством: {len(result)}")
+            conn.close()
+            return jsonify({'functions': result})
         else:
-            recommendations.append("Для выбранной трудовой функции нет подходящих тем")
-        
-        conn.close()
-        return jsonify({
-            "similarities": similarities,
-            "recommendations": recommendations
-        })
+            # Отбор тем по трудовой функции
+            cursor.execute(f'''
+                SELECT sr.topic_id, sr.topic_type, COALESCE(lt.name, pt.name) as name, 
+                       COALESCE(lt.hours, pt.hours) as hours, MAX(sr.{similarity_field}) as similarity
+                FROM similarity_results sr
+                LEFT JOIN lecture_topics lt ON sr.topic_type = 'lecture' AND sr.topic_id = lt.id
+                LEFT JOIN practical_topics pt ON sr.topic_type = 'practical' AND sr.topic_id = pt.id
+                WHERE sr.labor_function_id = ?
+                  AND sr.configuration_id = ?
+                  AND sr.{similarity_field} > ?
+                GROUP BY sr.topic_id, sr.topic_type, COALESCE(lt.name, pt.name), COALESCE(lt.hours, pt.hours)
+                ORDER BY similarity DESC
+            ''', (labor_function_id, configuration_id, threshold))
+            for row in cursor.fetchall():
+                result.append({
+                    'id': row['topic_id'],
+                    'name': row['name'],
+                    'type': row['topic_type'],
+                    'hours': row['hours'],
+                    'similarity': row['similarity']
+                })
+            logger.debug(f"Найдено уникальных тем с подходящим сходством: {len(result)}")
+            conn.close()
+            return jsonify({'topics': result})
     except Exception as e:
         logger.error(f"Ошибка при получении сходства: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/configurations')
+def get_configurations():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, name, description FROM vectorization_configurations ORDER BY id')
+        configs = []
+        for row in cursor.fetchall():
+            configs.append({
+                'id': row['id'],
+                'name': row['name'],
+                'description': row['description']
+            })
+        conn.close()
+        return jsonify(configs)
+    except Exception as e:
+        logger.error(f"Ошибка при получении конфигураций: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
