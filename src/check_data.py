@@ -18,25 +18,97 @@ def print_table_info(cursor, table_name):
             for col, val in zip(columns, row):
                 print(f"{col}: {val}")
 
+def check_relationships(cursor):
+    """Проверяет корректность связей между таблицами"""
+    print("\nПроверка связей между таблицами:")
+    
+    # Проверка дисциплин и их компетенций
+    cursor.execute("""
+        SELECT d.name, COUNT(dc.competency_id) as comp_count
+        FROM disciplines d
+        LEFT JOIN discipline_competencies dc ON d.id = dc.discipline_id
+        GROUP BY d.id
+    """)
+    print("\nКоличество компетенций по дисциплинам:")
+    for row in cursor.fetchall():
+        print(f"{row[0]}: {row[1]} компетенций")
+    
+    # Проверка разделов и их тем
+    cursor.execute("""
+        SELECT d.name, s.name as section_name, 
+               COUNT(lt.id) as lecture_count,
+               COUNT(pt.id) as practical_count,
+               COUNT(scq.id) as questions_count
+        FROM disciplines d
+        JOIN sections s ON d.id = s.discipline_id
+        LEFT JOIN lecture_topics lt ON s.id = lt.section_id
+        LEFT JOIN practical_topics pt ON s.id = pt.section_id
+        LEFT JOIN self_control_questions scq ON s.id = scq.section_id
+        GROUP BY s.id
+    """)
+    print("\nКоличество тем и вопросов по разделам:")
+    for row in cursor.fetchall():
+        print(f"Дисциплина: {row[0]}")
+        print(f"Раздел: {row[1]}")
+        print(f"- Лекций: {row[2]}")
+        print(f"- Практических: {row[3]}")
+        print(f"- Вопросов: {row[4]}")
+    
+    # Проверка трудовых функций и их компонентов
+    cursor.execute("""
+        SELECT lf.name, 
+               COUNT(CASE WHEN lc.component_type_id = 1 THEN 1 END) as actions,
+               COUNT(CASE WHEN lc.component_type_id = 2 THEN 1 END) as skills,
+               COUNT(CASE WHEN lc.component_type_id = 3 THEN 1 END) as knowledge,
+               COUNT(CASE WHEN lc.component_type_id = 4 THEN 1 END) as other
+        FROM labor_functions lf
+        LEFT JOIN labor_components lc ON lf.id = lc.labor_function_id
+        GROUP BY lf.id
+    """)
+    print("\nКоличество компонентов по трудовым функциям:")
+    for row in cursor.fetchall():
+        print(f"Трудовая функция: {row[0]}")
+        print(f"- Действий: {row[1]}")
+        print(f"- Умений: {row[2]}")
+        print(f"- Знаний: {row[3]}")
+        print(f"- Других характеристик: {row[4]}")
+
 def check_data():
     """Проверка загруженных данных"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Проверяем все таблицы
-    tables = [
-        'topics',
+    # Проверяем основные таблицы
+    main_tables = [
+        'disciplines',
+        'semesters',
+        'sections',
+        'lecture_topics',
+        'practical_topics',
+        'self_control_questions',
         'competencies',
+        'specialties',
         'labor_functions',
-        'component_types',
-        'labor_components',
-        'labor_function_components',
-        'topic_competency',
-        'topic_labor_function'
+        'labor_components'
     ]
     
-    for table in tables:
+    print("Проверка основных таблиц:")
+    for table in main_tables:
         print_table_info(cursor, table)
+    
+    # Проверяем таблицы связей
+    relation_tables = [
+        'discipline_semesters',
+        'discipline_competencies',
+        'specialty_labor_functions'
+    ]
+    
+    print("\nПроверка таблиц связей:")
+    for table in relation_tables:
+        print_table_info(cursor, table)
+    
+    # Проверяем корректность связей
+    check_relationships(cursor)
     
     conn.close()
 
