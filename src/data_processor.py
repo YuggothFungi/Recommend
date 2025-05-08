@@ -8,7 +8,7 @@ from datetime import datetime
 from src.schema import init_db
 from src.data_loader import load_all_data
 from src.text_processor import DatabaseTextProcessor
-from src.tfidf_vectorizer import DatabaseVectorizer
+from src.tfidf_vectorizer import TfidfDatabaseVectorizer
 from src.rubert_vectorizer import RuBertVectorizer
 from src.vectorizer import calculate_similarities
 
@@ -37,7 +37,7 @@ def process_data():
         
         # 4. Векторизация TF-IDF
         print("\n4. Векторизация TF-IDF...")
-        tfidf_vectorizer = DatabaseVectorizer()
+        tfidf_vectorizer = TfidfDatabaseVectorizer()
         tfidf_vectorizer.vectorize_all()
         print("✓ TF-IDF векторизация успешно завершена")
         

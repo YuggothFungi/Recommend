@@ -1,6 +1,13 @@
-import pickle
+import sys
+import os
+
+# Добавляем корневую директорию в PYTHONPATH
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import sqlite3
 import numpy as np
 from src.db import get_db_connection
+from src.vectorization_config import VectorizationConfig
 
 def print_vector_info(cursor, table_name, id_field, text_field):
     """Вывод информации о векторах"""
@@ -54,18 +61,118 @@ def print_vector_info(cursor, table_name, id_field, text_field):
         
         print("-" * 50)
 
-def check_vectors():
-    """Проверка векторов"""
+def print_vectorization_results(config_id: int):
+    """Вывод информации о результатах векторизации"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Проверяем векторы тем
-    print_vector_info(cursor, 'topic_vectors', 'topic_id', 't.title')
+    # Получаем информацию о конфигурации
+    config = VectorizationConfig(config_id)
+    print(f"\nКонфигурация векторизации:")
+    print(f"ID: {config.config_id}")
+    print(f"Тип: {config.config_type}")
+    print(f"Описание: {config.description}")
     
-    # Проверяем векторы трудовых функций
-    print_vector_info(cursor, 'labor_function_vectors', 'labor_function_id', 't.name')
+    # Получаем веса
+    print("\nВеса:")
+    for weight in config.weights:
+        print(f"- {weight.entity_type}.{weight.source_type}: {weight.weight}")
+        if weight.hours_weight:
+            print(f"  Часы: {weight.hours_weight}")
+    
+    # Получаем результаты векторизации
+    cursor.execute("""
+        SELECT 
+            entity_type,
+            COUNT(*) as count,
+            AVG(LENGTH(vector_data)) as avg_vector_size
+        FROM vectorization_results
+        WHERE configuration_id = ?
+        GROUP BY entity_type
+    """, (config_id,))
+    
+    print("\nРезультаты векторизации:")
+    for entity_type, count, avg_size in cursor.fetchall():
+        print(f"- {entity_type}: {count} векторов, средний размер {avg_size:.1f} байт")
+    
+    # Получаем результаты сходства
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total,
+            AVG(similarity_score) as avg_similarity,
+            MIN(similarity_score) as min_similarity,
+            MAX(similarity_score) as max_similarity
+        FROM similarity_results
+        WHERE configuration_id = ?
+    """, (config_id,))
+    
+    total, avg_sim, min_sim, max_sim = cursor.fetchone()
+    print("\nРезультаты сходства:")
+    print(f"- Всего сравнений: {total}")
+    print(f"- Среднее сходство: {avg_sim:.3f}")
+    print(f"- Минимальное сходство: {min_sim:.3f}")
+    print(f"- Максимальное сходство: {max_sim:.3f}")
+    
+    conn.close()
+
+def check_vectors(config_id=None):
+    """Проверка векторов в базе данных"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Получаем все векторы из базы данных
+    if config_id is not None:
+        cursor.execute("""
+            SELECT entity_type, entity_id, vector_type, vector_data
+            FROM vectorization_results
+            WHERE configuration_id = ?
+        """, (config_id,))
+    else:
+        cursor.execute("""
+            SELECT entity_type, entity_id, vector_type, vector_data
+            FROM vectorization_results
+        """)
+    
+    results = cursor.fetchall()
+    
+    if not results:
+        print("Векторы не найдены в базе данных")
+        return
+    
+    print(f"Найдено {len(results)} векторов")
+    print("=" * 50)
+    
+    # Группируем векторы по типу и сущности
+    for entity_type, entity_id, vector_type, vector_data in results:
+        print(f"Тип сущности: {entity_type}")
+        print(f"ID сущности: {entity_id}")
+        print(f"Тип вектора: {vector_type}")
+        
+        # Получаем название сущности
+        if entity_type == 'lecture_topic':
+            cursor.execute("SELECT name FROM lecture_topics WHERE id = ?", (entity_id,))
+        elif entity_type == 'practical_topic':
+            cursor.execute("SELECT name FROM practical_topics WHERE id = ?", (entity_id,))
+        elif entity_type == 'labor_function':
+            cursor.execute("SELECT name FROM labor_functions WHERE id = ?", (entity_id,))
+        
+        name = cursor.fetchone()[0]
+        print(f"Название: {name}")
+        
+        # Анализируем вектор
+        vector = np.frombuffer(vector_data, dtype=np.float32)
+        print(f"Размерность вектора: {vector.shape}")
+        print(f"Норма вектора: {np.linalg.norm(vector):.6f}")
+        print("Пример значений (первые 5):")
+        for i in range(min(5, len(vector))):
+            print(f"  {i}: {vector[i]:.6f}")
+        print("-" * 50)
     
     conn.close()
 
 if __name__ == "__main__":
-    check_vectors() 
+    if len(sys.argv) > 1:
+        config_id = int(sys.argv[1])
+        check_vectors(config_id)
+    else:
+        check_vectors() 

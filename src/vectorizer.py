@@ -2,11 +2,13 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 import json
 import os
-from src.tfidf_vectorizer import DatabaseVectorizer as TfidfDatabaseVectorizer
+from src.tfidf_vectorizer import TfidfDatabaseVectorizer
 from src.rubert_vectorizer import RuBertVectorizer
 import pickle
 import numpy as np
 from src.db import get_db_connection
+from src.vectorization_config import VectorizationConfig
+from src.vectorization_text_weights import VectorizationTextWeights
 
 class BaseVectorizer(ABC):
     """Абстрактный базовый класс для векторизаторов"""
@@ -36,30 +38,152 @@ class BaseVectorizer(ABC):
         """Загрузка метаданных векторизатора"""
         pass
 
-class DatabaseVectorizer:
+class Vectorizer:
     """Обёртка для работы с векторизаторами в базе данных"""
     
-    def __init__(self, vectorizer_type: str = "tfidf"):
+    def __init__(self, config: Optional[VectorizationConfig] = None, vectorizer_type: str = "tfidf"):
         """
         Инициализация векторизатора
         
         Args:
+            config: Конфигурация векторизации
             vectorizer_type: Тип векторизатора ("tfidf", "rubert")
         """
         self.vectorizer_type = vectorizer_type
         self.meta_file = 'data/vectorizer_meta.json'
+        self.config = config
         
         # Выбор конкретной реализации векторизатора
         if vectorizer_type == "tfidf":
-            self.vectorizer = TfidfDatabaseVectorizer()
+            self.vectorizer = TfidfDatabaseVectorizer(config)
         elif vectorizer_type == "rubert":
-            self.vectorizer = RuBertVectorizer()
+            self.vectorizer = RuBertVectorizer(config)
         else:
             raise ValueError(f"Неизвестный тип векторизатора: {vectorizer_type}")
+        
+        # Инициализация обработчика весов текста
+        if config is not None:
+            self.text_weights = VectorizationTextWeights(config)
     
     def vectorize_all(self, conn=None) -> None:
         """Векторизация всех текстов"""
-        self.vectorizer.vectorize_all(conn)
+        if self.config is None:
+            # Используем старый метод векторизации
+            self.vectorizer.vectorize_all(conn)
+            return
+            
+        if conn is None:
+            conn = get_db_connection()
+            should_close = True
+        else:
+            should_close = False
+            
+        cursor = conn.cursor()
+        
+        # Собираем все тексты для обучения
+        all_texts = []
+        
+        # Получаем тексты тем лекций
+        cursor.execute("SELECT id FROM lecture_topics")
+        lecture_topics = cursor.fetchall()
+        for topic_id, in lecture_topics:
+            text, _ = self.text_weights.get_lecture_topic_text(topic_id, conn)
+            all_texts.append(text)
+        
+        # Получаем тексты тем практик
+        cursor.execute("SELECT id FROM practical_topics")
+        practical_topics = cursor.fetchall()
+        for topic_id, in practical_topics:
+            text, _ = self.text_weights.get_practical_topic_text(topic_id, conn)
+            all_texts.append(text)
+        
+        # Получаем тексты трудовых функций
+        cursor.execute("SELECT id FROM labor_functions")
+        labor_functions = cursor.fetchall()
+        for function_id, in labor_functions:
+            text = self.text_weights.get_labor_function_text(function_id, conn)
+            all_texts.append(text)
+        
+        # Обучаем векторизатор на всех текстах
+        print("Обучение векторизатора...")
+        self.vectorizer.fit(all_texts)
+        print("Векторизатор обучен")
+        
+        # Векторизуем темы лекций
+        print("Векторизация тем лекций...")
+        for topic_id, in lecture_topics:
+            text, hours = self.text_weights.get_lecture_topic_text(topic_id, conn)
+            vector = self.vectorizer.transform([text])[0]
+            
+            # Преобразуем разреженную матрицу в плотную перед сохранением
+            if hasattr(vector, 'toarray'):
+                vector = vector.toarray()
+            
+            # Сохраняем результат
+            cursor.execute("""
+                INSERT INTO vectorization_results 
+                (configuration_id, entity_type, entity_id, vector_type, vector_data)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                self.config.config_id,
+                'lecture_topic',
+                topic_id,
+                self.vectorizer_type,
+                vector.tobytes()
+            ))
+        
+        # Векторизуем темы практик
+        print("Векторизация тем практик...")
+        for topic_id, in practical_topics:
+            text, hours = self.text_weights.get_practical_topic_text(topic_id, conn)
+            vector = self.vectorizer.transform([text])[0]
+            
+            # Преобразуем разреженную матрицу в плотную перед сохранением
+            if hasattr(vector, 'toarray'):
+                vector = vector.toarray()
+            
+            # Сохраняем результат
+            cursor.execute("""
+                INSERT INTO vectorization_results 
+                (configuration_id, entity_type, entity_id, vector_type, vector_data)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                self.config.config_id,
+                'practical_topic',
+                topic_id,
+                self.vectorizer_type,
+                vector.tobytes()
+            ))
+        
+        # Векторизуем трудовые функции
+        print("Векторизация трудовых функций...")
+        for function_id, in labor_functions:
+            text = self.text_weights.get_labor_function_text(function_id, conn)
+            vector = self.vectorizer.transform([text])[0]
+            
+            # Преобразуем разреженную матрицу в плотную перед сохранением
+            if hasattr(vector, 'toarray'):
+                vector = vector.toarray()
+            
+            # Сохраняем результат
+            cursor.execute("""
+                INSERT INTO vectorization_results 
+                (configuration_id, entity_type, entity_id, vector_type, vector_data)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                self.config.config_id,
+                'labor_function',
+                function_id,
+                self.vectorizer_type,
+                vector.tobytes()
+            ))
+        
+        conn.commit()
+        
+        if should_close:
+            conn.close()
+            
+        print("Векторизация завершена!")
     
     def get_meta(self) -> Dict[str, Any]:
         """Получение метаданных векторизатора"""
@@ -72,187 +196,130 @@ class DatabaseVectorizer:
         """Сохранение метаданных векторизатора"""
         self.vectorizer._save_meta()
 
-def calculate_similarities(conn=None):
-    """Расчет сходства между темами и трудовыми функциями"""
-    if conn is None:
-        conn = get_db_connection()
-        should_close = True
-    else:
-        should_close = False
-        
+def calculate_similarities(config: VectorizationConfig):
+    """
+    Рассчитывает сходство между темами и трудовыми функциями
+    
+    Args:
+        config: Конфигурация векторизации
+    """
+    conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Проверяем существование таблиц
+    # Получаем все векторы тем лекций
     cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name IN ('topic_vectors', 'labor_function_vectors', 'topic_labor_function')
-    """)
-    existing_tables = {row[0] for row in cursor.fetchall()}
+        SELECT entity_id, vector_data, vector_type
+        FROM vectorization_results
+        WHERE configuration_id = ? AND entity_type = 'lecture_topic'
+    """, (config.config_id,))
+    lecture_vectors = cursor.fetchall()
     
-    if 'topic_vectors' not in existing_tables or 'labor_function_vectors' not in existing_tables:
-        print("Ошибка: таблицы с векторами не существуют")
-        if should_close:
-            conn.close()
-        return
-    
-    # Создаем таблицу для результатов, если её нет
-    if 'topic_labor_function' not in existing_tables:
-        cursor.execute("""
-            CREATE TABLE topic_labor_function (
-                topic_id INTEGER,
-                labor_function_id TEXT,
-                tfidf_similarity REAL,
-                rubert_similarity REAL,
-                PRIMARY KEY (topic_id, labor_function_id),
-                FOREIGN KEY (topic_id) REFERENCES topics(id),
-                FOREIGN KEY (labor_function_id) REFERENCES labor_functions(id)
-            )
-        """)
-        conn.commit()
-    
-    # Очищаем существующие значения
-    cursor.execute("DELETE FROM topic_labor_function")
-    conn.commit()
-    
-    # Получаем все вектора тем
+    # Получаем все векторы тем практик
     cursor.execute("""
-        SELECT topic_id, tfidf_vector, rubert_vector
-        FROM topic_vectors
-        WHERE tfidf_vector IS NOT NULL OR rubert_vector IS NOT NULL
-    """)
-    topic_vectors = cursor.fetchall()
+        SELECT entity_id, vector_data, vector_type
+        FROM vectorization_results
+        WHERE configuration_id = ? AND entity_type = 'practical_topic'
+    """, (config.config_id,))
+    practical_vectors = cursor.fetchall()
     
-    if not topic_vectors:
-        print("Ошибка: нет векторов тем")
-        if should_close:
-            conn.close()
-        return
-    
-    # Получаем все вектора трудовых функций
+    # Получаем все векторы трудовых функций
     cursor.execute("""
-        SELECT labor_function_id, tfidf_vector, rubert_vector
-        FROM labor_function_vectors
-        WHERE tfidf_vector IS NOT NULL OR rubert_vector IS NOT NULL
-    """)
+        SELECT entity_id, vector_data, vector_type
+        FROM vectorization_results
+        WHERE configuration_id = ? AND entity_type = 'labor_function'
+    """, (config.config_id,))
     function_vectors = cursor.fetchall()
     
-    if not function_vectors:
-        print("Ошибка: нет векторов трудовых функций")
-        if should_close:
-            conn.close()
-        return
+    # Группируем векторы по типу
+    lecture_vectors_by_type = {}
+    practical_vectors_by_type = {}
+    function_vectors_by_type = {}
     
-    # Для каждой пары считаем сходство
-    total_pairs = len(topic_vectors) * len(function_vectors)
-    processed_pairs = 0
+    for topic_id, vector_data, vector_type in lecture_vectors:
+        if vector_type not in lecture_vectors_by_type:
+            lecture_vectors_by_type[vector_type] = []
+        lecture_vectors_by_type[vector_type].append((topic_id, np.frombuffer(vector_data)))
     
-    for topic_id, topic_tfidf, topic_rubert in topic_vectors:
-        for function_id, function_tfidf, function_rubert in function_vectors:
-            processed_pairs += 1
-            if processed_pairs % 100 == 0:
-                print(f"Обработано {processed_pairs}/{total_pairs} пар")
-            
-            tfidf_sim = 0.0
-            rubert_sim = 0.0
-            
-            # Сходство по TF-IDF
-            if topic_tfidf and function_tfidf:
-                try:
-                    # Читаем векторы как float32
-                    topic_tfidf_vec = np.frombuffer(topic_tfidf, dtype=np.float32)
-                    function_tfidf_vec = np.frombuffer(function_tfidf, dtype=np.float32)
-                    
-                    # Проверяем, что размеры векторов совпадают
-                    if topic_tfidf_vec.shape != function_tfidf_vec.shape:
-                        print(f"Пропуск: разные размеры векторов для темы {topic_id} и функции {function_id}")
-                        continue
-                    
-                    # Проверяем, что векторы не нулевые
-                    if np.all(topic_tfidf_vec == 0) or np.all(function_tfidf_vec == 0):
-                        print(f"Пропуск: нулевой вектор для темы {topic_id} и функции {function_id}")
-                        continue
-                    
-                    # Нормализуем векторы
-                    topic_norm = np.linalg.norm(topic_tfidf_vec)
-                    function_norm = np.linalg.norm(function_tfidf_vec)
-                    
-                    if topic_norm == 0 or function_norm == 0:
-                        print(f"Пропуск: нулевая норма вектора для темы {topic_id} и функции {function_id}")
-                        continue
-                        
-                    topic_tfidf_vec = topic_tfidf_vec / topic_norm
-                    function_tfidf_vec = function_tfidf_vec / function_norm
+    for topic_id, vector_data, vector_type in practical_vectors:
+        if vector_type not in practical_vectors_by_type:
+            practical_vectors_by_type[vector_type] = []
+        practical_vectors_by_type[vector_type].append((topic_id, np.frombuffer(vector_data)))
+    
+    for function_id, vector_data, vector_type in function_vectors:
+        if vector_type not in function_vectors_by_type:
+            function_vectors_by_type[vector_type] = []
+        function_vectors_by_type[vector_type].append((function_id, np.frombuffer(vector_data)))
+    
+    # Получаем часы для тем
+    cursor.execute("SELECT id, hours FROM lecture_topics")
+    lecture_hours = {row[0]: row[1] for row in cursor.fetchall()}
+    
+    cursor.execute("SELECT id, hours FROM practical_topics")
+    practical_hours = {row[0]: row[1] for row in cursor.fetchall()}
+    
+    # Рассчитываем сходство для каждого типа векторов
+    for vector_type in ['tfidf', 'rubert']:
+        # Для лекционных тем
+        if vector_type in lecture_vectors_by_type and vector_type in function_vectors_by_type:
+            for topic_id, topic_vec in lecture_vectors_by_type[vector_type]:
+                for function_id, function_vec in function_vectors_by_type[vector_type]:
+                    # Для TF-IDF нормализуем векторы, для RuBERT они уже нормализованы
+                    if vector_type == 'tfidf':
+                        topic_vec_norm = topic_vec / np.linalg.norm(topic_vec)
+                        function_vec_norm = function_vec / np.linalg.norm(function_vec)
+                    else:
+                        topic_vec_norm = topic_vec
+                        function_vec_norm = function_vec
                     
                     # Считаем косинусное сходство
-                    tfidf_sim = float(np.dot(topic_tfidf_vec, function_tfidf_vec))
+                    similarity = float(np.dot(topic_vec_norm, function_vec_norm))
                     
-                    # Проверяем корректность значения
-                    if not (0 <= tfidf_sim <= 1):
-                        print(f"Предупреждение: некорректное значение TF-IDF сходства {tfidf_sim} для темы {topic_id} и функции {function_id}")
-                        tfidf_sim = max(0.0, min(1.0, tfidf_sim))
+                    # Сохраняем результат
+                    cursor.execute("""
+                        INSERT INTO similarity_results 
+                        (configuration_id, topic_id, topic_type, labor_function_id, 
+                         rubert_similarity, tfidf_similarity, topic_hours)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        config.config_id,
+                        topic_id,
+                        'lecture',
+                        function_id,
+                        similarity if vector_type == 'rubert' else 0.0,  # rubert_similarity
+                        similarity if vector_type == 'tfidf' else 0.0,  # tfidf_similarity
+                        lecture_hours.get(topic_id, 0)
+                    ))
+        
+        # Для практических тем
+        if vector_type in practical_vectors_by_type and vector_type in function_vectors_by_type:
+            for topic_id, topic_vec in practical_vectors_by_type[vector_type]:
+                for function_id, function_vec in function_vectors_by_type[vector_type]:
+                    # Для TF-IDF нормализуем векторы, для RuBERT они уже нормализованы
+                    if vector_type == 'tfidf':
+                        topic_vec_norm = topic_vec / np.linalg.norm(topic_vec)
+                        function_vec_norm = function_vec / np.linalg.norm(function_vec)
+                    else:
+                        topic_vec_norm = topic_vec
+                        function_vec_norm = function_vec
                     
-                except Exception as e:
-                    print(f"Ошибка при расчете TF-IDF сходства для темы {topic_id} и функции {function_id}: {e}")
-                    continue
-            
-            # Сходство по ruBERT
-            if topic_rubert and function_rubert:
-                try:
-                    topic_rubert_vec = np.frombuffer(topic_rubert, dtype=np.float32)
-                    function_rubert_vec = np.frombuffer(function_rubert, dtype=np.float32)
+                    # Считаем косинусное сходство
+                    similarity = float(np.dot(topic_vec_norm, function_vec_norm))
                     
-                    # Нормализуем векторы
-                    topic_norm = np.linalg.norm(topic_rubert_vec)
-                    function_norm = np.linalg.norm(function_rubert_vec)
-                    
-                    if topic_norm == 0 or function_norm == 0:
-                        print(f"Пропуск: нулевая норма ruBERT вектора для темы {topic_id} и функции {function_id}")
-                        continue
-                        
-                    topic_rubert_vec = topic_rubert_vec / topic_norm
-                    function_rubert_vec = function_rubert_vec / function_norm
-                    
-                    rubert_sim = float(np.dot(topic_rubert_vec, function_rubert_vec))
-                    
-                    # Проверяем корректность значения
-                    if not (0 <= rubert_sim <= 1):
-                        print(f"Предупреждение: некорректное значение ruBERT сходства {rubert_sim} для темы {topic_id} и функции {function_id}")
-                        rubert_sim = max(0.0, min(1.0, rubert_sim))
-                        
-                except Exception as e:
-                    print(f"Ошибка при расчете ruBERT сходства для темы {topic_id} и функции {function_id}: {e}")
-                    continue
-            
-            try:
-                # Сохраняем сходство
-                cursor.execute("""
-                    INSERT OR REPLACE INTO topic_labor_function 
-                    (topic_id, labor_function_id, tfidf_similarity, rubert_similarity)
-                    VALUES (?, ?, ?, ?)
-                """, (topic_id, function_id, tfidf_sim, rubert_sim))
-                
-                # Коммитим каждые 100 записей для оптимизации производительности
-                if processed_pairs % 100 == 0:
-                    conn.commit()
-                    
-            except Exception as e:
-                print(f"Ошибка при сохранении сходства для темы {topic_id} и функции {function_id}: {e}")
-                continue
+                    # Сохраняем результат
+                    cursor.execute("""
+                        INSERT INTO similarity_results 
+                        (configuration_id, topic_id, topic_type, labor_function_id, 
+                         rubert_similarity, tfidf_similarity, topic_hours)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        config.config_id,
+                        topic_id,
+                        'practical',
+                        function_id,
+                        similarity if vector_type == 'rubert' else 0.0,  # rubert_similarity
+                        similarity if vector_type == 'tfidf' else 0.0,  # tfidf_similarity
+                        practical_hours.get(topic_id, 0)
+                    ))
     
-    # Финальный коммит
     conn.commit()
-    
-    # Проверяем результаты
-    cursor.execute("SELECT COUNT(*) FROM topic_labor_function WHERE tfidf_similarity > 0")
-    tfidf_count = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM topic_labor_function WHERE rubert_similarity > 0")
-    rubert_count = cursor.fetchone()[0]
-    
-    print(f"\nСтатистика:")
-    print(f"Всего пар: {total_pairs}")
-    print(f"Пар с ненулевым TF-IDF сходством: {tfidf_count}")
-    print(f"Пар с ненулевым ruBERT сходством: {rubert_count}")
-    
-    if should_close:
-        conn.close()
+    conn.close()

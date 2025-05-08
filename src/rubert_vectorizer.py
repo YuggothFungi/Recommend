@@ -7,12 +7,20 @@ import os
 import sqlite3
 from src.db import get_db_connection
 from src.check_normalized_texts import check_normalized_texts
+from src.vectorization_config import VectorizationConfig
+from src.vectorization_text_weights import VectorizationTextWeights
 
 class RuBertVectorizer:
     """Векторизатор на основе ruBERT"""
     
-    def __init__(self, conn=None):
-        """Инициализация векторизатора"""
+    def __init__(self, config: VectorizationConfig, conn=None):
+        """
+        Инициализация векторизатора
+        
+        Args:
+            config: Конфигурация векторизации
+            conn: Соединение с базой данных (опционально)
+        """
         self.model_name = 'sberbank-ai/sbert_large_nlu_ru'
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModel.from_pretrained(self.model_name)
@@ -21,6 +29,8 @@ class RuBertVectorizer:
         self.model.eval()
         self.vector_size = 1024  # Размер вектора для sbert_large_nlu_ru
         self.db_conn = conn  # Использовать переданное соединение
+        self.config = config
+        self.text_weights = VectorizationTextWeights(config)
     
     def _mean_pooling(self, model_output, attention_mask):
         """Усреднение токенов для получения эмбеддинга предложения"""
@@ -77,87 +87,51 @@ class RuBertVectorizer:
     
     def _get_topic_texts(self, cursor):
         """Получение объединенных нормализованных текстов тем"""
-        cursor.execute("""
-            SELECT 
-                t.id,
-                COALESCE(t.nltk_normalized_title, '') || ' ' || 
-                COALESCE(t.nltk_normalized_description, '')
-            FROM topics t
-        """)
-        return cursor.fetchall()
-    
-    def _get_labor_function_texts(self, cursor):
-        """Получение объединенных нормализованных текстов трудовых функций"""
-        cursor.execute("""
-            SELECT 
-                lf.id,
-                COALESCE(lf.nltk_normalized_name, '')
-            FROM labor_functions lf
-        """)
-        function_texts = cursor.fetchall()
+        cursor.execute("SELECT id FROM lecture_topics")
+        lecture_topics = cursor.fetchall()
         
-        # Получаем компоненты для каждой функции
+        cursor.execute("SELECT id FROM practical_topics")
+        practical_topics = cursor.fetchall()
+        
         result = []
-        for function_id, function_text in function_texts:
-            cursor.execute("""
-                SELECT COALESCE(lc.nltk_normalized_description, '')
-                FROM labor_function_components lfc
-                JOIN labor_components lc ON lfc.component_id = lc.id
-                WHERE lfc.labor_function_id = ?
-            """, (function_id,))
-            component_texts = cursor.fetchall()
-            
-            # Объединяем тексты компонентов
-            component_text = ' '.join(text[0] for text in component_texts)
-            
-            # Объединяем с текстом функции
-            full_text = f"{function_text} {component_text}".strip()
-            result.append((function_id, full_text))
+        for topic_id, in lecture_topics:
+            text, _ = self.text_weights.get_lecture_topic_text(topic_id, cursor.connection)
+            result.append((topic_id, text))
+        
+        for topic_id, in practical_topics:
+            text, _ = self.text_weights.get_practical_topic_text(topic_id, cursor.connection)
+            result.append((topic_id, text))
         
         return result
     
-    def _vectorize_table(self, table_name: str, text_column: str, conn=None) -> None:
-        """Векторизация текстов в таблице"""
-        if conn is None:
-            conn = self.db_conn
-        if conn is None:
-            raise ValueError("Не указано соединение с базой данных")
-            
-        cursor = conn.cursor()
+    def _get_labor_function_texts(self, cursor):
+        """Получение объединенных нормализованных текстов трудовых функций"""
+        cursor.execute("SELECT id FROM labor_functions")
+        labor_functions = cursor.fetchall()
         
-        # Проверяем наличие столбца rubert_vector
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        columns = cursor.fetchall()
-        has_vector_column = any(col[1] == 'rubert_vector' for col in columns)
+        result = []
+        for function_id, in labor_functions:
+            text = self.text_weights.get_labor_function_text(function_id, cursor.connection)
+            result.append((function_id, text))
         
-        if not has_vector_column:
-            cursor.execute(f"""
-                ALTER TABLE {table_name}
-                ADD COLUMN rubert_vector BLOB
-            """)
+        return result
+    
+    def _save_vector(self, cursor, entity_type: str, entity_id: int, vector: np.ndarray) -> None:
+        """Сохранение вектора в базу данных"""
+        vector_bytes = vector.tobytes()
         
-        # Получаем тексты
-        cursor.execute(f"SELECT id, {text_column} FROM {table_name}")
-        texts = cursor.fetchall()
-        
-        if not texts:
-            return
-        
-        # Векторизуем тексты
-        text_ids = [row[0] for row in texts]
-        text_contents = [row[1] for row in texts]
-        vectors = self.transform(text_contents)
-        
-        # Сохраняем векторы
-        for text_id, vector in zip(text_ids, vectors):
-            vector_bytes = vector.tobytes()
-            cursor.execute(f"""
-                UPDATE {table_name}
-                SET rubert_vector = ?
-                WHERE id = ?
-            """, (vector_bytes, text_id))
-        
-        conn.commit()
+        # Сохраняем в vectorization_results
+        cursor.execute("""
+            INSERT INTO vectorization_results 
+            (configuration_id, entity_type, entity_id, vector_type, vector_data)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            self.config.config_id,
+            entity_type,
+            entity_id,
+            'rubert',
+            vector_bytes
+        ))
     
     def vectorize_all(self, conn=None) -> None:
         """Векторизация всех текстов в базе данных"""
@@ -189,24 +163,7 @@ class RuBertVectorizer:
         topic_vectors = self.transform(topic_texts_only)
         
         for (topic_id, _), vector in zip(topic_texts, topic_vectors):
-            vector_bytes = vector.tobytes()
-            # Проверяем существование записи
-            cursor.execute("""
-                SELECT COUNT(*) FROM topic_vectors WHERE topic_id = ?
-            """, (topic_id,))
-            exists = cursor.fetchone()[0] > 0
-            
-            if exists:
-                cursor.execute("""
-                    UPDATE topic_vectors
-                    SET rubert_vector = ?
-                    WHERE topic_id = ?
-                """, (vector_bytes, topic_id))
-            else:
-                cursor.execute("""
-                    INSERT INTO topic_vectors (topic_id, rubert_vector)
-                    VALUES (?, ?)
-                """, (topic_id, vector_bytes))
+            self._save_vector(cursor, 'lecture_topic' if topic_id in [t[0] for t in topic_texts[:len(topic_texts)//2]] else 'practical_topic', topic_id, vector)
         
         # Векторизуем трудовые функции
         print("Векторизация трудовых функций...")
@@ -214,24 +171,7 @@ class RuBertVectorizer:
         function_vectors = self.transform(function_texts_only)
         
         for (function_id, _), vector in zip(function_texts, function_vectors):
-            vector_bytes = vector.tobytes()
-            # Проверяем существование записи
-            cursor.execute("""
-                SELECT COUNT(*) FROM labor_function_vectors WHERE labor_function_id = ?
-            """, (function_id,))
-            exists = cursor.fetchone()[0] > 0
-            
-            if exists:
-                cursor.execute("""
-                    UPDATE labor_function_vectors
-                    SET rubert_vector = ?
-                    WHERE labor_function_id = ?
-                """, (vector_bytes, function_id))
-            else:
-                cursor.execute("""
-                    INSERT INTO labor_function_vectors (labor_function_id, rubert_vector)
-                    VALUES (?, ?)
-                """, (function_id, vector_bytes))
+            self._save_vector(cursor, 'labor_function', function_id, vector)
         
         conn.commit()
         

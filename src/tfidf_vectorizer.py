@@ -5,6 +5,8 @@ import json
 import os
 from src.db import get_db_connection
 from src.check_normalized_texts import check_normalized_texts
+from src.vectorization_config import VectorizationConfig
+from src.vectorization_text_weights import VectorizationTextWeights
 
 class TextVectorizer:
     def __init__(self):
@@ -39,10 +41,20 @@ class TextVectorizer:
         self.vector_size = result.shape[1]
         return result
 
-class DatabaseVectorizer:
-    def __init__(self):
+class TfidfDatabaseVectorizer:
+    """Векторизатор TF-IDF для работы с базой данных"""
+    
+    def __init__(self, config: VectorizationConfig = None):
+        """
+        Инициализация векторизатора
+        
+        Args:
+            config: Конфигурация векторизации
+        """
         self.vectorizer = TextVectorizer()
         self.meta_file = 'data/vectorizer_meta.json'
+        self.config = config
+        self.text_weights = VectorizationTextWeights(config)
     
     def _save_meta(self):
         """Сохранение метаданных векторизатора"""
@@ -56,108 +68,57 @@ class DatabaseVectorizer:
     
     def _get_topic_texts(self, cursor):
         """Получение объединенных нормализованных текстов тем"""
-        cursor.execute("""
-            SELECT 
-                t.id,
-                COALESCE(t.nltk_normalized_title, '') || ' ' || 
-                COALESCE(t.nltk_normalized_description, '')
-            FROM topics t
-        """)
-        return cursor.fetchall()
-    
-    def _get_labor_function_texts(self, cursor):
-        """Получение объединенных нормализованных текстов трудовых функций"""
-        cursor.execute("""
-            SELECT 
-                lf.id,
-                COALESCE(lf.nltk_normalized_name, '')
-            FROM labor_functions lf
-        """)
-        function_texts = cursor.fetchall()
+        cursor.execute("SELECT id FROM lecture_topics")
+        lecture_topics = cursor.fetchall()
         
-        # Получаем компоненты для каждой функции
+        cursor.execute("SELECT id FROM practical_topics")
+        practical_topics = cursor.fetchall()
+        
         result = []
-        for function_id, function_text in function_texts:
-            cursor.execute("""
-                SELECT COALESCE(lc.nltk_normalized_description, '')
-                FROM labor_function_components lfc
-                JOIN labor_components lc ON lfc.component_id = lc.id
-                WHERE lfc.labor_function_id = ?
-            """, (function_id,))
-            component_texts = cursor.fetchall()
-            
-            # Объединяем тексты компонентов
-            component_text = ' '.join(text[0] for text in component_texts)
-            
-            # Объединяем с текстом функции
-            full_text = f"{function_text} {component_text}".strip()
-            result.append((function_id, full_text))
+        for topic_id, in lecture_topics:
+            text, _ = self.text_weights.get_lecture_topic_text(topic_id, cursor.connection)
+            result.append((topic_id, text))
+        
+        for topic_id, in practical_topics:
+            text, _ = self.text_weights.get_practical_topic_text(topic_id, cursor.connection)
+            result.append((topic_id, text))
         
         return result
     
-    def _save_vector(self, cursor, table_name, id_field, id_value, vector):
-        """Сохранение вектора в базу данных"""
-        # Проверяем существование колонки tfidf_vector
-        cursor.execute(f"""
-            SELECT COUNT(*) 
-            FROM pragma_table_info('{table_name}') 
-            WHERE name = 'tfidf_vector'
-        """)
-        if cursor.fetchone()[0] == 0:
-            print(f"Добавляем колонку tfidf_vector в таблицу {table_name}")
-            cursor.execute(f"""
-                ALTER TABLE {table_name}
-                ADD COLUMN tfidf_vector BLOB
-            """)
+    def _get_labor_function_texts(self, cursor):
+        """Получение объединенных нормализованных текстов трудовых функций"""
+        cursor.execute("SELECT id FROM labor_functions")
+        labor_functions = cursor.fetchall()
         
+        result = []
+        for function_id, in labor_functions:
+            text = self.text_weights.get_labor_function_text(function_id, cursor.connection)
+            result.append((function_id, text))
+        
+        return result
+    
+    def _save_vector(self, cursor, entity_type: str, entity_id: int, vector):
+        """Сохранение вектора в базу данных"""
         # Преобразуем sparse matrix в dense array
         if hasattr(vector, 'toarray'):
             vector = vector.toarray()
         
-        # Преобразуем в float32 для совместимости с calculate_similarities
+        # Преобразуем в float32
         vector = vector.astype(np.float32).reshape(-1)
         vector_bytes = vector.tobytes()
         
-        print(f"Сохранение вектора для {id_field}={id_value} в таблице {table_name}")
-        print(f"Размер вектора: {vector.shape}, тип: {vector.dtype}")
-        
-        # Проверяем, существует ли запись
-        cursor.execute(f"""
-            SELECT COUNT(*) 
-            FROM {table_name} 
-            WHERE {id_field} = ?
-        """, (id_value,))
-        exists = cursor.fetchone()[0] > 0
-        
-        if exists:
-            # Обновляем существующую запись
-            cursor.execute(f"""
-                UPDATE {table_name}
-                SET tfidf_vector = ?
-                WHERE {id_field} = ?
-            """, (vector_bytes, id_value))
-        else:
-            # Создаем новую запись
-            cursor.execute(f"""
-                INSERT INTO {table_name} ({id_field}, tfidf_vector)
-                VALUES (?, ?)
-            """, (id_value, vector_bytes))
-        
-        # Проверяем, что вектор сохранен
-        cursor.execute(f"""
-            SELECT tfidf_vector 
-            FROM {table_name} 
-            WHERE {id_field} = ?
-        """, (id_value,))
-        saved_vector = cursor.fetchone()
-        if saved_vector and saved_vector[0]:
-            saved_vector_array = np.frombuffer(saved_vector[0], dtype=np.float32)
-            print(f"Вектор успешно сохранен для {id_field}={id_value}")
-            print(f"Размер сохраненного вектора: {saved_vector_array.shape}")
-            print(f"Сумма элементов: {np.sum(saved_vector_array)}")
-            print(f"Количество ненулевых элементов: {np.count_nonzero(saved_vector_array)}")
-        else:
-            print(f"Ошибка: вектор не сохранен для {id_field}={id_value}")
+        # Сохраняем в vectorization_results
+        cursor.execute("""
+            INSERT INTO vectorization_results 
+            (configuration_id, entity_type, entity_id, vector_type, vector_data)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            self.config.config_id,
+            entity_type,
+            entity_id,
+            'tfidf',
+            vector_bytes
+        ))
     
     def vectorize_all(self, conn=None):
         """Векторизация всех текстов"""
@@ -197,7 +158,7 @@ class DatabaseVectorizer:
         topic_vectors = self.vectorizer.transform(topic_texts_only)
         
         for (topic_id, _), vector in zip(topic_texts, topic_vectors):
-            self._save_vector(cursor, 'topic_vectors', 'topic_id', topic_id, vector)
+            self._save_vector(cursor, 'lecture_topic' if topic_id in [t[0] for t in topic_texts[:len(topic_texts)//2]] else 'practical_topic', topic_id, vector)
         
         # Векторизуем трудовые функции
         print("Векторизация трудовых функций...")
@@ -205,7 +166,7 @@ class DatabaseVectorizer:
         function_vectors = self.vectorizer.transform(function_texts_only)
         
         for (function_id, _), vector in zip(function_texts, function_vectors):
-            self._save_vector(cursor, 'labor_function_vectors', 'labor_function_id', function_id, vector)
+            self._save_vector(cursor, 'labor_function', function_id, vector)
         
         conn.commit()
         
@@ -214,6 +175,20 @@ class DatabaseVectorizer:
             
         print("Векторизация завершена!")
 
+    def fit(self, texts):
+        """Обучение векторизатора на текстах"""
+        return self.vectorizer.fit(texts)
+
+    def transform(self, texts):
+        """Преобразование текстов в векторы"""
+        if not self.vectorizer.is_fitted:
+            raise ValueError("Векторизатор не обучен. Сначала вызовите метод fit()")
+        return self.vectorizer.transform(texts)
+
+    def fit_transform(self, texts):
+        """Обучение и преобразование текстов в векторы"""
+        return self.vectorizer.fit_transform(texts)
+
 if __name__ == "__main__":
-    vectorizer = DatabaseVectorizer()
+    vectorizer = TfidfDatabaseVectorizer()
     vectorizer.vectorize_all() 
