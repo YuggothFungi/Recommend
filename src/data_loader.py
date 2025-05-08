@@ -10,14 +10,14 @@ from src.db import get_db_connection
 from src.schema import init_db, reset_db
 
 def load_competencies():
-    """Загрузка компетенций из abilities.json"""
+    """Загрузка компетенций из JSON файла"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     # Очищаем таблицу перед загрузкой
     cursor.execute("DELETE FROM competencies")
     
-    with open('input/abilities.json', 'r', encoding='utf-8') as f:
+    with open('input/competencies.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
         
     for comp_id, comp_data in data.items():
@@ -104,15 +104,15 @@ def load_curriculum_discipline(data, cursor):
     # Получаем название дисциплины
     discipline_name = data['дисциплина']
     
+    # Преобразуем списки целей и задач в строки
+    goals = '\n'.join(data[program_key].get('цели', [])) if isinstance(data[program_key].get('цели'), list) else data[program_key].get('цели', '')
+    tasks = '\n'.join(data[program_key].get('задачи', [])) if isinstance(data[program_key].get('задачи'), list) else data[program_key].get('задачи', '')
+    
     # Вставляем дисциплину
     cursor.execute("""
         INSERT INTO disciplines (name, goals, tasks)
         VALUES (?, ?, ?)
-    """, (
-        discipline_name,
-        data[program_key].get('цели', ''),
-        data[program_key].get('задачи', '')
-    ))
+    """, (discipline_name, goals, tasks))
     discipline_id = cursor.lastrowid
     
     # Добавляем компетенции
@@ -125,12 +125,9 @@ def load_curriculum_discipline(data, cursor):
     
     # Обрабатываем семестры
     for semester_data in data[program_key]['семестры']:
-        # Добавляем семестр
-        cursor.execute("""
-            INSERT INTO semesters (number)
-            VALUES (?)
-        """, (semester_data['номер'],))
-        semester_id = cursor.lastrowid
+        # Получаем id семестра (семестры уже предзаполнены)
+        cursor.execute("SELECT id FROM semesters WHERE number = ?", (semester_data['номер'],))
+        semester_id = cursor.fetchone()[0]
         
         # Связываем семестр с дисциплиной
         cursor.execute("""
@@ -189,7 +186,7 @@ def load_curriculum():
     cursor.execute("DELETE FROM sections")
     cursor.execute("DELETE FROM discipline_semesters")
     cursor.execute("DELETE FROM discipline_competencies")
-    cursor.execute("DELETE FROM semesters")
+    # Не очищаем таблицу semesters, так как она предзаполнена
     cursor.execute("DELETE FROM disciplines")
     
     # Получаем все JSON файлы из директории

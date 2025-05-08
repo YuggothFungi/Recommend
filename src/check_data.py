@@ -2,7 +2,19 @@ from src.db import get_db_connection
 
 def print_table_info(cursor, table_name):
     """Выводит информацию о количестве записей в таблице и первые несколько строк"""
-    cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+    # Получаем информацию о столбцах таблицы
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    columns = cursor.fetchall()
+    
+    # Определяем, есть ли столбец id
+    has_id = any(col[1] == 'id' for col in columns)
+    
+    # Формируем запрос в зависимости от наличия столбца id
+    if has_id:
+        cursor.execute(f"SELECT COUNT(DISTINCT id) FROM {table_name}")
+    else:
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+    
     count = cursor.fetchone()[0]
     print(f"\nТаблица {table_name}:")
     print(f"Всего записей: {count}")
@@ -36,9 +48,9 @@ def check_relationships(cursor):
     # Проверка разделов и их тем
     cursor.execute("""
         SELECT d.name, s.name as section_name, 
-               COUNT(lt.id) as lecture_count,
-               COUNT(pt.id) as practical_count,
-               COUNT(scq.id) as questions_count
+               COUNT(DISTINCT lt.id) as lecture_count,
+               COUNT(DISTINCT pt.id) as practical_count,
+               COUNT(DISTINCT scq.id) as questions_count
         FROM disciplines d
         JOIN sections s ON d.id = s.discipline_id
         LEFT JOIN lecture_topics lt ON s.id = lt.section_id
@@ -57,10 +69,10 @@ def check_relationships(cursor):
     # Проверка трудовых функций и их компонентов
     cursor.execute("""
         SELECT lf.name, 
-               COUNT(CASE WHEN lc.component_type_id = 1 THEN 1 END) as actions,
-               COUNT(CASE WHEN lc.component_type_id = 2 THEN 1 END) as skills,
-               COUNT(CASE WHEN lc.component_type_id = 3 THEN 1 END) as knowledge,
-               COUNT(CASE WHEN lc.component_type_id = 4 THEN 1 END) as other
+               COUNT(DISTINCT CASE WHEN lc.component_type_id = 1 THEN lc.id END) as actions,
+               COUNT(DISTINCT CASE WHEN lc.component_type_id = 2 THEN lc.id END) as skills,
+               COUNT(DISTINCT CASE WHEN lc.component_type_id = 3 THEN lc.id END) as knowledge,
+               COUNT(DISTINCT CASE WHEN lc.component_type_id = 4 THEN lc.id END) as other
         FROM labor_functions lf
         LEFT JOIN labor_components lc ON lf.id = lc.labor_function_id
         GROUP BY lf.id

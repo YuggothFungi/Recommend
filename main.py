@@ -11,12 +11,13 @@ from pathlib import Path
 import argparse
 from src.text_processor import DatabaseTextProcessor
 from src.vectorizer import DatabaseVectorizer
-from src.data_loader import load_all_data
+from src.data_loader import load_all_data, load_competencies, load_labor_functions, load_curriculum
 from src.check_data import check_data
 from src.check_vectors import check_vectors
 from src.check_similarities import check_similarities
 from src.download_nltk_data import setup_nltk
 from src.data_processor import process_data
+from src.schema import init_db, reset_db
 
 def check_dependencies():
     """Проверка и установка необходимых зависимостей"""
@@ -82,9 +83,25 @@ def print_top_tfidf_similarities():
 def main():
     """Основная функция запуска приложения"""
     parser = argparse.ArgumentParser(description='Обработка и векторизация текстов')
+    
+    # Группа аргументов для управления БД
+    db_group = parser.add_argument_group('Управление базой данных')
+    db_group.add_argument('--reset-db', action='store_true', help='Сбросить базу данных')
+    db_group.add_argument('--init-db', action='store_true', help='Инициализировать базу данных')
+    db_group.add_argument('--load-data', action='store_true', help='Загрузить данные в базу')
+    db_group.add_argument('--check-data', action='store_true', help='Проверить загруженные данные')
+    
+    # Группа аргументов для загрузки конкретных данных
+    data_group = parser.add_argument_group('Загрузка конкретных данных')
+    data_group.add_argument('--load-competencies', action='store_true', help='Загрузить только компетенции')
+    data_group.add_argument('--load-labor-functions', action='store_true', help='Загрузить только трудовые функции')
+    data_group.add_argument('--load-curriculum', action='store_true', help='Загрузить только учебные планы')
+    
+    # Существующие аргументы
     parser.add_argument('--vectorizer', type=str, default='tfidf',
                       help='Тип векторизатора (tfidf или rubert)')
     parser.add_argument('--full-cycle', action='store_true', help='Выполнить полный цикл обработки')
+    
     args = parser.parse_args()
     
     # Добавляем путь к src в PYTHONPATH
@@ -105,36 +122,62 @@ def main():
             # Запускаем полный цикл обработки данных
             process_data()
         else:
+            # Управление базой данных
+            if args.reset_db:
+                print("Сброс базы данных...")
+                reset_db()
+            
+            if args.init_db:
+                print("Инициализация базы данных...")
+                init_db()
+            
             # Загрузка данных
-            print("Загрузка данных...")
-            load_all_data()
+            if args.load_data:
+                print("Загрузка всех данных...")
+                load_all_data()
+            else:
+                if args.load_competencies:
+                    print("Загрузка компетенций...")
+                    load_competencies()
+                
+                if args.load_labor_functions:
+                    print("Загрузка трудовых функций...")
+                    load_labor_functions()
+                
+                if args.load_curriculum:
+                    print("Загрузка учебных планов...")
+                    load_curriculum()
             
             # Проверка данных
-            print("Проверка данных...")
-            check_data()
+            if args.check_data:
+                print("Проверка данных...")
+                check_data()
             
-            # Обработка текстов
-            print("Обработка текстов...")
-            processor = DatabaseTextProcessor()
-            processor.process_all()
-            
-            # Векторизация
-            print(f"Векторизация с использованием {args.vectorizer}...")
-            vectorizer = DatabaseVectorizer(vectorizer_type=args.vectorizer)
-            vectorizer.vectorize_all()
-            
-            # Расчет сходства
-            print("Расчет сходства между темами и трудовыми функциями...")
-            from src.vectorizer import calculate_similarities
-            calculate_similarities()
-            
-            # Проверка векторов
-            print("Проверка векторов...")
-            check_vectors()
-            
-            # Проверка сходства
-            print("Проверка сходства...")
-            check_similarities()
+            # Если не указаны конкретные действия, выполняем полный цикл
+            if not any([args.reset_db, args.init_db, args.load_data, args.load_competencies,
+                       args.load_labor_functions, args.load_curriculum, args.check_data]):
+                # Обработка текстов
+                print("Обработка текстов...")
+                processor = DatabaseTextProcessor()
+                processor.process_all()
+                
+                # Векторизация
+                print(f"Векторизация с использованием {args.vectorizer}...")
+                vectorizer = DatabaseVectorizer(vectorizer_type=args.vectorizer)
+                vectorizer.vectorize_all()
+                
+                # Расчет сходства
+                print("Расчет сходства между темами и трудовыми функциями...")
+                from src.vectorizer import calculate_similarities
+                calculate_similarities()
+                
+                # Проверка векторов
+                print("Проверка векторов...")
+                check_vectors()
+                
+                # Проверка сходства
+                print("Проверка сходства...")
+                check_similarities()
         
     except Exception as e:
         print(f"\n❌ Ошибка: {str(e)}")

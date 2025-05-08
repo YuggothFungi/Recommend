@@ -28,6 +28,13 @@ def init_db():
         )
     """)
     
+    # Предзаполнение таблицы семестров
+    cursor.execute("""
+        INSERT OR IGNORE INTO semesters (id, number) VALUES
+        (1, 1), (2, 2), (3, 3), (4, 4),
+        (5, 5), (6, 6), (7, 7), (8, 8)
+    """)
+    
     # Связь дисциплин и семестров - многие-ко-многим
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS discipline_semesters (
@@ -115,20 +122,6 @@ def init_db():
             PRIMARY KEY (discipline_id, competency_id),
             FOREIGN KEY (discipline_id) REFERENCES disciplines(id),
             FOREIGN KEY (competency_id) REFERENCES competencies(id)
-        )
-    """)
-    
-    # Связь тем с компетенциями - многие-ко-многим
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS topic_competencies (
-            topic_id INTEGER,
-            competency_id TEXT,
-            topic_type TEXT NOT NULL,  -- 'lecture' или 'practical'
-            PRIMARY KEY (topic_id, competency_id, topic_type),
-            FOREIGN KEY (topic_id) REFERENCES lecture_topics(id),
-            FOREIGN KEY (topic_id) REFERENCES practical_topics(id),
-            FOREIGN KEY (competency_id) REFERENCES competencies(id),
-            CHECK (topic_type IN ('lecture', 'practical'))
         )
     """)
     
