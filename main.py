@@ -20,6 +20,13 @@ from src.download_nltk_data import setup_nltk
 from src.data_processor import process_data
 from src.schema import init_db, reset_db
 from src.vectorization_config import VectorizationConfig
+from src.check_db import check_database
+import os
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def check_dependencies():
     """Проверка и установка необходимых зависимостей"""
@@ -43,30 +50,30 @@ def check_dependencies():
         try:
             pkg_resources.require(f"{package}>={min_version}")
         except pkg_resources.VersionConflict:
-            print(f"⚠️ {package} версии >={min_version} не установлен")
+            logger.warning(f"⚠️ {package} версии >={min_version} не установлен")
             missing.append(package)
         except pkg_resources.DistributionNotFound:
-            print(f"⚠️ {package} не установлен")
+            logger.warning(f"⚠️ {package} не установлен")
             missing.append(package)
     
     if missing:
-        print("\nУстановка отсутствующих зависимостей...")
+        logger.info("\nУстановка отсутствующих зависимостей...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
-        print("✓ Зависимости установлены")
+        logger.info("✓ Зависимости установлены")
 
 def print_vectorization_configs():
     """Выводит список доступных конфигураций векторизации"""
     configs = VectorizationConfig.get_available_configs()
-    print("\nДоступные конфигурации векторизации:")
+    logger.info("\nДоступные конфигурации векторизации:")
     for config in configs:
-        print(f"\nID: {config.config_id}")
-        print(f"Тип: {config.config_type}")
-        print(f"Описание: {config.description}")
-        print("Веса:")
+        logger.info(f"\nID: {config.config_id}")
+        logger.info(f"Тип: {config.config_type}")
+        logger.info(f"Описание: {config.description}")
+        logger.info("Веса:")
         for weight in config.weights:
-            print(f"  - {weight.entity_type}.{weight.source_type}: {weight.weight}")
+            logger.info(f"  - {weight.entity_type}.{weight.source_type}: {weight.weight}")
             if weight.hours_weight:
-                print(f"    Часы: {weight.hours_weight}")
+                logger.info(f"    Часы: {weight.hours_weight}")
 
 def main():
     """Основная функция запуска приложения"""
@@ -102,24 +109,44 @@ def main():
     vectorization_group.add_argument('--list-configs', action='store_true', help='Показать список доступных конфигураций')
     vectorization_group.add_argument('--check-vectors', type=int, help='Проверить векторы для указанной конфигурации')
     
+    # Группа аргументов для веб-интерфейса
+    web_group = parser.add_argument_group('Веб-интерфейс')
+    web_group.add_argument('--web', action='store_true', help='Запустить веб-сервер')
+    web_group.add_argument('--port', type=int, default=5000, help='Порт для веб-сервера (по умолчанию: 5000)')
+    web_group.add_argument('--host', type=str, default='0.0.0.0', help='Хост для веб-сервера (по умолчанию: 0.0.0.0)')
+    
     # Существующие аргументы
     parser.add_argument('--full-cycle', action='store_true', help='Выполнить полный цикл обработки')
     
     args = parser.parse_args()
     
-    # Добавляем путь к src в PYTHONPATH
-    src_path = str(Path(__file__).parent)
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
+    # Добавляем корневую директорию в PYTHONPATH
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.append(root_dir)
     
     try:
         # Проверяем зависимости
-        print("Проверка зависимостей...")
+        logger.info("Проверка зависимостей...")
         check_dependencies()
         
         # Настраиваем NLTK
-        print("\nПроверка данных NLTK...")
+        logger.info("\nПроверка данных NLTK...")
         setup_nltk()
+        
+        # Запуск веб-сервера
+        if args.web:
+            logger.info("Проверка базы данных перед запуском веб-сервера...")
+            if not check_database():
+                logger.error("База данных не готова. Пожалуйста, инициализируйте базу данных и загрузите данные.")
+                logger.info("Используйте следующие команды:")
+                logger.info("python main.py --init-db")
+                logger.info("python main.py --load-data")
+                sys.exit(1)
+            
+            logger.info(f"Запуск веб-сервера на {args.host}:{args.port}...")
+            from frontend.app import app
+            app.run(host=args.host, port=args.port, debug=True)
+            return
         
         # Показываем список конфигураций
         if args.list_configs:
@@ -128,7 +155,7 @@ def main():
         
         # Проверяем векторы
         if args.check_vectors:
-            print(f"Проверка векторов для конфигурации {args.check_vectors}...")
+            logger.info(f"Проверка векторов для конфигурации {args.check_vectors}...")
             check_vectors(args.check_vectors)
             return
         
@@ -139,40 +166,40 @@ def main():
         
         # Сброс базы данных
         if args.reset_db:
-            print("Сброс базы данных...")
+            logger.info("Сброс базы данных...")
             reset_db()
-            print("База данных успешно сброшена")
+            logger.info("База данных успешно сброшена")
         
         # Инициализация базы данных
         if args.init_db:
-            print("Инициализация базы данных...")
+            logger.info("Инициализация базы данных...")
             init_db()
-            print("База данных успешно инициализирована")
+            logger.info("База данных успешно инициализирована")
         
         # Загрузка данных
         if args.load_data:
-            print("Загрузка данных...")
+            logger.info("Загрузка данных...")
             load_all_data()
-            print("Данные успешно загружены")
+            logger.info("Данные успешно загружены")
         elif args.load_competencies:
-            print("Загрузка компетенций...")
+            logger.info("Загрузка компетенций...")
             load_competencies()
-            print("Компетенции успешно загружены")
+            logger.info("Компетенции успешно загружены")
         elif args.load_labor_functions:
-            print("Загрузка трудовых функций...")
+            logger.info("Загрузка трудовых функций...")
             load_labor_functions()
-            print("Трудовые функции успешно загружены")
+            logger.info("Трудовые функции успешно загружены")
         elif args.load_curriculum:
-            print("Загрузка учебного плана...")
+            logger.info("Загрузка учебного плана...")
             load_curriculum()
-            print("Учебный план успешно загружен")
+            logger.info("Учебный план успешно загружен")
         
         # Проверка данных
         if args.check_data:
-            print("Проверка данных...")
+            logger.info("Проверка данных...")
             check_data()
         elif args.check_data_extended:
-            print("Расширенная проверка данных...")
+            logger.info("Расширенная проверка данных...")
             from src.db import get_db_connection
             conn = get_db_connection()
             try:
@@ -182,14 +209,14 @@ def main():
         
         # Нормализация текстов
         if args.normalize_texts:
-            print("Нормализация текстов...")
+            logger.info("Нормализация текстов...")
             processor = DatabaseTextProcessor()
             processor.process_all()
-            print("Нормализация текстов завершена")
+            logger.info("Нормализация текстов завершена")
         
         # Проверка нормализации текстов
         if args.check_texts:
-            print("Проверка нормализации текстов...")
+            logger.info("Проверка нормализации текстов...")
             from src.db import get_db_connection
             conn = get_db_connection()
             try:
@@ -202,29 +229,29 @@ def main():
                    args.load_labor_functions, args.load_curriculum, args.check_data,
                    args.check_data_extended, args.normalize_texts, args.check_texts]):
             # Обработка текстов
-            print("Обработка текстов...")
+            logger.info("Обработка текстов...")
             processor = DatabaseTextProcessor()
             processor.process_all()
             
             # Векторизация
             if args.config_id:
-                print(f"Векторизация с использованием конфигурации {args.config_id} и алгоритма {args.vectorizer}...")
+                logger.info(f"Векторизация с использованием конфигурации {args.config_id} и алгоритма {args.vectorizer}...")
                 config = VectorizationConfig(args.config_id)
                 config.vectorizer_type = args.vectorizer
                 vectorizer = Vectorizer(config=config, vectorizer_type=args.vectorizer)
             else:
-                print(f"Векторизация с использованием {args.vectorizer}...")
+                logger.info(f"Векторизация с использованием {args.vectorizer}...")
                 vectorizer = Vectorizer(vectorizer_type=args.vectorizer)
             
             vectorizer.vectorize_all()
             
             # Расчет сходства
-            print("Расчет сходства между темами и трудовыми функциями...")
+            logger.info("Расчет сходства между темами и трудовыми функциями...")
             from src.vectorizer import calculate_similarities
             calculate_similarities(config)
     
     except Exception as e:
-        print(f"Ошибка: {str(e)}")
+        logger.error(f"Ошибка: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":

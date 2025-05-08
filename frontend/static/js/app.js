@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const disciplineSelect = document.getElementById('discipline');
     const thresholdSlider = document.getElementById('threshold');
     const thresholdValue = document.getElementById('threshold-value');
+    const similarityTypeSelect = document.getElementById('similarity-type');
     const topicsTable = document.getElementById('topics-table').getElementsByTagName('tbody')[0];
     const functionsTable = document.getElementById('functions-table').getElementsByTagName('tbody')[0];
     const recommendationsDiv = document.getElementById('recommendations');
@@ -18,15 +19,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Обработчики событий
     disciplineSelect.addEventListener('change', handleDisciplineChange);
     thresholdSlider.addEventListener('input', handleThresholdChange);
+    similarityTypeSelect.addEventListener('change', handleSimilarityTypeChange);
+
+    // Функция для логирования
+    function log(message, data = null) {
+        console.log(`[${new Date().toISOString()}] ${message}`, data || '');
+    }
 
     // Функция загрузки дисциплин
     async function loadDisciplines() {
         try {
+            log('Загрузка дисциплин...');
             const response = await fetch('/api/disciplines');
-            const disciplines = await response.json();
+            log('Ответ от сервера:', response);
             
-            // Очищаем и заполняем выпадающий список
-            disciplineSelect.innerHTML = '<option value="">Выберите дисциплину...</option>';
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const disciplines = await response.json();
+            log('Полученные дисциплины:', disciplines);
+            
+            disciplineSelect.innerHTML = '<option value="">Выберите дисциплину</option>';
             disciplines.forEach(discipline => {
                 const option = document.createElement('option');
                 option.value = discipline.id;
@@ -34,162 +48,119 @@ document.addEventListener('DOMContentLoaded', function() {
                 disciplineSelect.appendChild(option);
             });
         } catch (error) {
-            console.error('Ошибка при загрузке дисциплин:', error);
+            log('Ошибка при загрузке дисциплин:', error);
+            alert('Ошибка при загрузке дисциплин');
         }
     }
 
     // Функция загрузки тем по выбранной дисциплине
     async function loadTopics(disciplineId) {
         try {
-            console.log('Загрузка тем для дисциплины:', disciplineId);
+            log('Загрузка тем для дисциплины:', disciplineId);
             const response = await fetch(`/api/topics?discipline_id=${disciplineId}`);
-            console.log('Ответ от сервера:', response);
+            log('Ответ от сервера:', response);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const topics = await response.json();
-            console.log('Полученные темы:', topics);
+            log('Полученные темы:', topics);
             
-            // Очищаем и заполняем таблицу тем
-            const tbody = document.querySelector('#topics-table tbody');
-            tbody.innerHTML = '';
+            if (!Array.isArray(topics)) {
+                throw new Error('Полученные данные не являются массивом');
+            }
             
-            topics.forEach(topic => {
-                const tr = document.createElement('tr');
-                tr.dataset.topicId = topic.id;
-                tr.innerHTML = `
-                    <td>${topic.name}</td>
-                    <td>${topic.description || ''}</td>
-                    <td>${topic.hours || '-'}</td>
-                    <td class="similarity">${typeof topic.similarity === 'number' ? topic.similarity.toFixed(2) : '-'}</td>
-                `;
-                tr.addEventListener('click', () => handleTopicClick(topic.id));
-                tbody.appendChild(tr);
-            });
+            updateTopicsTable(topics);
         } catch (error) {
-            console.error('Ошибка при загрузке тем:', error);
+            log('Ошибка при загрузке тем:', error);
+            alert('Ошибка при загрузке тем');
         }
     }
 
     // Функция загрузки трудовых функций
     async function loadLaborFunctions() {
         try {
-            const response = await fetch('/api/labor_functions');
-            const functions = await response.json();
+            log('Загрузка всех трудовых функций');
+            const response = await fetch('/api/labor-functions');
+            log('Ответ от сервера:', response);
             
-            // Очищаем и заполняем таблицу функций
-            functionsTable.innerHTML = '';
-            functions.forEach(func => {
-                const row = document.createElement('tr');
-                row.dataset.id = func.id;
-                row.innerHTML = `
-                    <td>${func.name}</td>
-                    <td>-</td>
-                `;
-                row.addEventListener('click', () => handleFunctionClick(func.id));
-                functionsTable.appendChild(row);
-            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const functions = await response.json();
+            log('Полученные трудовые функции:', functions);
+            
+            updateFunctionsTable(functions);
         } catch (error) {
-            console.error('Ошибка при загрузке трудовых функций:', error);
+            log('Ошибка при загрузке трудовых функций:', error);
+            alert('Ошибка при загрузке трудовых функций');
         }
     }
 
     // Функция загрузки сходства и рекомендаций
-    async function loadSimilarities(id, type) {
-        const threshold = thresholdSlider.value / 100;
-        const url = `/api/similarities?${type}_id=${id}&threshold=${threshold}`;
+    async function loadSimilarities(topicId) {
         try {
-            console.log('Загрузка сходства:', { id, type, threshold, url });
-            const response = await fetch(url);
+            const threshold = thresholdSlider.value / 100;
+            const similarityType = similarityTypeSelect.value;
+            
+            log('Загрузка сходства для темы:', { topicId, threshold, similarityType });
+            const response = await fetch(`/api/similarities?topic_id=${topicId}&threshold=${threshold}&similarity_type=${similarityType}`);
+            log('Ответ от сервера:', response);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
-            console.log('Полученные данные:', data);
-            // Проверяем наличие рекомендации
-            let highlightAllLow = false;
+            log('Полученные данные о сходстве:', data);
+            
             let recommendations = data.recommendations || [];
-            if (type === 'labor_function' && (!data.results || data.results.length === 0)) {
+            
+            if (!data.similarities || data.similarities.length === 0) {
                 recommendations = ['Для выбранной трудовой функции нет подходящих тем'];
-                highlightAllLow = true;
             } else if (data.recommendations && data.recommendations.some(r => r.includes('Тема не обеспечивает трудовые функции'))) {
-                highlightAllLow = true;
+                recommendations = ['Тема не обеспечивает трудовые функции'];
             }
-            if (type === 'topic') {
-                updateFunctionsTable(data.results);
-            } else {
-                updateTopicsTable(data.results, highlightAllLow);
-            }
+            
             updateRecommendations(recommendations);
         } catch (error) {
-            console.error('Ошибка при загрузке сходства:', error);
+            log('Ошибка при загрузке сходства:', error);
+            alert('Ошибка при загрузке сходства');
         }
     }
 
     // Функция обновления таблицы трудовых функций
-    function updateFunctionsTable(results) {
-        // Сортируем по similarity по убыванию, элементы без similarity внизу
-        const sortedResults = [...results].sort((a, b) => {
-            if (typeof b.similarity === 'number' && typeof a.similarity === 'number') {
-                return b.similarity - a.similarity;
-            } else if (typeof b.similarity === 'number') {
-                return 1;
-            } else if (typeof a.similarity === 'number') {
-                return -1;
-            } else {
-                return 0;
-            }
-        });
+    function updateFunctionsTable(functions) {
+        log('Обновление таблицы трудовых функций:', functions);
         functionsTable.innerHTML = '';
-        sortedResults.forEach(func => {
+        functions.forEach(func => {
             const row = document.createElement('tr');
-            row.dataset.id = func.id;
             row.innerHTML = `
-                <td>${func.name}</td>
-                <td>${typeof func.similarity === 'number' ? func.similarity.toFixed(2) : '-'}</td>
+                <td style="width: 100%; white-space: normal;">${func.name}</td>
+                <td style="min-width: 60px; max-width: 80px;">-</td>
             `;
-            // Подсвечиваем только выбранную функцию (голубым)
-            if (String(func.id) === String(selectedFunctionId)) {
-                row.classList.add('selected');
-            }
-            // Бледно-розовая подсветка для низкого similarity или его отсутствия
-            if (typeof func.similarity !== 'number' || func.similarity < 0.1) {
-                row.classList.add('low-similarity');
-            }
-            row.addEventListener('click', () => handleFunctionClick(func.id));
             functionsTable.appendChild(row);
         });
     }
 
     // Функция обновления таблицы тем
-    function updateTopicsTable(topics, highlightAllLow = false) {
-        // Сортируем по similarity по убыванию, элементы без similarity внизу
-        const sortedTopics = [...topics].sort((a, b) => {
-            if (typeof b.similarity === 'number' && typeof a.similarity === 'number') {
-                return b.similarity - a.similarity;
-            } else if (typeof b.similarity === 'number') {
-                return 1;
-            } else if (typeof a.similarity === 'number') {
-                return -1;
-            } else {
-                return 0;
-            }
-        });
-        const tbody = document.querySelector('#topics-table tbody');
-        tbody.innerHTML = '';
-        sortedTopics.forEach(topic => {
-            const tr = document.createElement('tr');
-            tr.dataset.topicId = topic.id;
-            tr.innerHTML = `
-                <td>${topic.name}</td>
-                <td>${topic.description}</td>
-                <td>${topic.hours || '-'}</td>
-                <td class="similarity">${typeof topic.similarity === 'number' ? topic.similarity.toFixed(2) : '-'}</td>
+    function updateTopicsTable(topics) {
+        log('Обновление таблицы тем:', topics);
+        // Очищаем только тело таблицы (tbody)
+        topicsTable.innerHTML = '';
+        // Добавляем все темы без фильтрации
+        topics.forEach(topic => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="min-width: 40px; max-width: 60px;">${topic.type === 'lecture' ? 'Л' : 'П'}</td>
+                <td style="width: 100%; white-space: normal;">${topic.name}</td>
+                <td style="min-width: 40px; max-width: 60px;">${topic.hours !== null && topic.hours !== undefined ? topic.hours : '-'}</td>
+                <td style="min-width: 60px; max-width: 80px;">-</td>
             `;
-            // Подсвечиваем только выбранную тему (голубым)
-            if (String(topic.id) === String(selectedTopicId)) {
-                tr.classList.add('selected');
-            }
-            // Бледно-розовая подсветка для низкого similarity или его отсутствия, либо если highlightAllLow=true
-            if (highlightAllLow || typeof topic.similarity !== 'number' || topic.similarity < 0.1) {
-                tr.classList.add('low-similarity');
-            }
-            tr.addEventListener('click', () => handleTopicClick(topic.id));
-            tbody.appendChild(tr);
+            row.onclick = () => loadSimilarities(topic.id);
+            topicsTable.appendChild(row);
         });
     }
 
@@ -215,14 +186,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Функция обновления рекомендаций
     function updateRecommendations(recommendations) {
+        log('Обновление рекомендаций:', recommendations);
         recommendationsDiv.innerHTML = '';
         recommendations.forEach(rec => {
             const div = document.createElement('div');
             div.textContent = rec;
-            if (
-                rec.includes('Тема не обеспечивает трудовые функции') ||
-                rec.includes('Для выбранной трудовой функции нет подходящих тем')
-            ) {
+            if (rec.includes('не обеспечивает') || rec.includes('нет подходящих')) {
                 div.classList.add('recommendation-warning');
             }
             recommendationsDiv.appendChild(div);
@@ -247,9 +216,17 @@ document.addEventListener('DOMContentLoaded', function() {
         thresholdValue.textContent = value;
         
         if (selectedTopicId) {
-            loadSimilarities(selectedTopicId, 'topic');
+            loadSimilarities(selectedTopicId);
         } else if (selectedFunctionId) {
-            loadSimilarities(selectedFunctionId, 'labor_function');
+            loadSimilarities(selectedFunctionId);
+        }
+    }
+
+    function handleSimilarityTypeChange() {
+        if (selectedTopicId) {
+            loadSimilarities(selectedTopicId);
+        } else if (selectedFunctionId) {
+            loadSimilarities(selectedFunctionId);
         }
     }
 
@@ -266,22 +243,26 @@ document.addEventListener('DOMContentLoaded', function() {
         
         selectedTopicId = topicId;
         selectedFunctionId = null;
-        loadSimilarities(topicId, 'topic');
+        loadSimilarities(topicId);
     }
 
     function handleFunctionClick(functionId) {
         // Снимаем выделение с предыдущей выбранной функции
         if (selectedFunctionId) {
-            const prevRow = functionsTable.querySelector(`tr[data-id="${selectedFunctionId}"]`);
+            const prevRow = document.querySelector(`#functions-table tr[data-id="${selectedFunctionId}"]`);
             if (prevRow) prevRow.classList.remove('selected');
         }
         
         // Выделяем новую функцию
-        const row = functionsTable.querySelector(`tr[data-id="${functionId}"]`);
+        const row = document.querySelector(`#functions-table tr[data-id="${functionId}"]`);
         if (row) row.classList.add('selected');
         
         selectedFunctionId = functionId;
         selectedTopicId = null;
-        loadSimilarities(functionId, 'labor_function');
+        loadSimilarities(functionId);
     }
+
+    // Инициализация
+    log('Инициализация приложения...');
+    loadDisciplines();
 }); 

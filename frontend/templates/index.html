@@ -22,6 +22,13 @@
                     <input type="range" id="threshold" min="0" max="100" value="50" step="5">
                     <span id="threshold-value">0.50</span>
                 </div>
+                <div class="similarity-type">
+                    <label for="similarity-type">Метод векторизации:</label>
+                    <select id="similarity-type">
+                        <option value="rubert">ruBERT</option>
+                        <option value="tfidf">TF-IDF</option>
+                    </select>
+                </div>
             </div>
         </header>
 
@@ -33,10 +40,10 @@
                         <table id="topics-table">
                             <thead>
                                 <tr>
-                                    <th>Название темы</th>
-                                    <th>Описание</th>
-                                    <th>Часы</th>
-                                    <th>Сходство</th>
+                                    <th style="min-width: 40px; max-width: 60px;">Тип</th>
+                                    <th style="width: 100%;">Название темы</th>
+                                    <th style="min-width: 40px; max-width: 60px;">Часы</th>
+                                    <th style="min-width: 60px; max-width: 80px;">Сходство</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -52,8 +59,8 @@
                         <table id="functions-table">
                             <thead>
                                 <tr>
-                                    <th>Название функции</th>
-                                    <th>Сходство</th>
+                                    <th style="width: 80%;">Название функции</th>
+                                    <th style="min-width: 60px; max-width: 80px;">Сходство</th>
                                 </tr>
                             </thead>
                             <tbody>

@@ -36,9 +36,10 @@ header h1 {
     display: flex;
     gap: 20px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
-.discipline-select, .similarity-threshold {
+.discipline-select, .similarity-threshold, .similarity-type {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -48,6 +49,7 @@ select, input[type="range"] {
     padding: 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
+    min-width: 150px;
 }
 
 /* Основной контент */
@@ -107,66 +109,91 @@ th, td {
     padding: 12px;
     text-align: left;
     border-bottom: 1px solid #ddd;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-th:last-child, td:last-child {
-    position: sticky;
-    right: 0;
-    background-color: #fff;
-    z-index: 1;
+/* Стили для колонок */
+#topics-table th:nth-child(1),
+#topics-table td:nth-child(1) {
+    width: 80px;
+}
+
+#topics-table th:nth-child(2),
+#topics-table td:nth-child(2) {
+    width: 25%;
+}
+
+#topics-table th:nth-child(3),
+#topics-table td:nth-child(3) {
+    width: 40%;
+}
+
+#topics-table th:nth-child(4),
+#topics-table td:nth-child(4) {
+    width: 80px;
+}
+
+#topics-table th:nth-child(5),
+#topics-table td:nth-child(5) {
     width: 100px;
-    text-align: center;
 }
 
-th:last-child {
-    background-color: #f8f9fa;
-}
-
-td.similarity {
-    font-weight: bold;
-    color: #2196F3;
-}
-
-tr:hover {
-    background-color: #f5f5f5;
-}
-
+/* Стили для выделения */
 tr.selected {
     background-color: #e3f2fd;
 }
 
-tr.highlighted {
-    background-color: #fff3e0;
+tr.low-similarity {
+    background-color: #ffebee;
 }
 
-/* Блок рекомендаций */
+/* Стили для рекомендаций */
 .recommendations-panel {
     background-color: #fff;
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-top: auto;
-    max-height: 200px;
-    overflow-y: auto;
 }
 
 .recommendations-panel h2 {
-    margin: 0 0 10px 0;
+    margin: 0 0 20px 0;
     color: #333;
 }
 
 #recommendations {
-    max-height: 200px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 #recommendations div {
     padding: 10px;
-    border-bottom: 1px solid #eee;
+    border-radius: 4px;
+    background-color: #f5f5f5;
 }
 
-#recommendations div:last-child {
-    border-bottom: none;
+#recommendations div.recommendation-warning {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+/* Стили для переключателя метода векторизации */
+.similarity-type select {
+    background-color: #fff;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.similarity-type select:hover {
+    border-color: #2196f3;
+}
+
+.similarity-type select:focus {
+    outline: none;
+    border-color: #2196f3;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
 }
 
 /* Адаптивность */
