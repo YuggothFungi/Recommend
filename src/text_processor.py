@@ -5,6 +5,10 @@ import re
 from src.db import get_db_connection
 import pymorphy2
 from src.domain_phrases import DOMAIN_PHRASES, LEMMATIZATION_EXCEPTIONS
+from .metrics import MetricsAnalyzer
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TextProcessor:
     def __init__(self):
@@ -28,9 +32,18 @@ class TextProcessor:
         
         # Словарь тематических словосочетаний
         self.domain_phrases = DOMAIN_PHRASES
+        
+        self.metrics = MetricsAnalyzer()
+        
+        # Добавляем списки для хранения текстов
+        self.metrics.original_texts = []
+        self.metrics.normalized_texts = []
+        self.metrics.domain_phrases = self.domain_phrases
     
     def lemmatize_word(self, word):
         """Лемматизация одного слова с учетом части речи"""
+        self.metrics.start_operation()
+        
         if '_' in word:  # Если это часть тематического словосочетания
             return word
             
@@ -51,8 +64,13 @@ class TextProcessor:
     
     def normalize_text(self, text):
         """Нормализация текста с сохранением тематических словосочетаний"""
+        self.metrics.start_operation()
+        
         if not text:
             return ""
+            
+        # Сохраняем оригинальный текст
+        self.metrics.original_texts.append(text)
         
         print(f"\nОригинальный текст: {text}")
         
@@ -98,11 +116,13 @@ class TextProcessor:
         
         # Лемматизация каждого слова
         lemmatized_tokens = []
+        original_tokens = []  # Сохраняем оригинальные токены для расчета точности лемматизации
         for token in tokens:
             if '_' in token:
                 print(f"Пропускаем лемматизацию для словосочетания: {token}")
                 lemmatized_tokens.append(token)
             else:
+                original_tokens.append(token)  # Сохраняем оригинальный токен
                 lemma = self.lemmatize_word(token)
                 print(f"Лемматизация: {token} -> {lemma}")
                 lemmatized_tokens.append(lemma)
@@ -113,7 +133,32 @@ class TextProcessor:
         text = ' '.join(tokens).replace('_', ' ')
         print(f"Финальный результат: {text}\n")
         
+        # Сохраняем нормализованный текст
+        self.metrics.normalized_texts.append(text)
+        
+        # Рассчитываем точность нормализации
+        self.metrics.calculate_accuracy(
+            [self.metrics.original_texts[-1]],  # Последний оригинальный текст
+            [text],  # Текущий нормализованный текст
+            self.domain_phrases
+        )
+        
+        # Рассчитываем точность лемматизации
+        if original_tokens:  # Если были слова для лемматизации
+            self.metrics.calculate_lemmatization_accuracy(
+                original_tokens,
+                [t for t in tokens if t not in self.domain_phrases.values()],  # Исключаем составные термины
+                LEMMATIZATION_EXCEPTIONS
+            )
+        
+        duration = self.metrics.end_operation("normalization")
+        logger.info(f"Время нормализации: {duration:.2f}мс")
+        
         return text
+    
+    def get_metrics_report(self) -> str:
+        """Получить отчет о метриках обработки текста."""
+        return self.metrics.generate_report()
 
 class DatabaseTextProcessor:
     def __init__(self):
@@ -322,6 +367,10 @@ class DatabaseTextProcessor:
             self.process_labor_functions(conn)
             self.process_labor_components(conn)
             print("Обработка текстов завершена!")
+            
+            # Сохраняем отчет о метриках
+            report_path = self.text_processor.metrics.save_report()
+            print(f"Отчет о метриках сохранен в: {report_path}")
         finally:
             conn.close()
 
