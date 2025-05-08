@@ -15,6 +15,7 @@ from src.data_loader import load_all_data, load_competencies, load_labor_functio
 from src.check_data import check_data
 from src.check_vectors import check_vectors
 from src.check_similarities import check_similarities
+from src.check_normalized_texts import check_normalized_texts
 from src.download_nltk_data import setup_nltk
 from src.data_processor import process_data
 from src.schema import init_db, reset_db
@@ -97,6 +98,11 @@ def main():
     data_group.add_argument('--load-labor-functions', action='store_true', help='Загрузить только трудовые функции')
     data_group.add_argument('--load-curriculum', action='store_true', help='Загрузить только учебные планы')
     
+    # Группа аргументов для обработки текстов
+    text_group = parser.add_argument_group('Обработка текстов')
+    text_group.add_argument('--normalize-texts', action='store_true', help='Нормализовать все текстовые поля в базе данных')
+    text_group.add_argument('--check-texts', action='store_true', help='Проверить нормализацию текстов')
+    
     # Существующие аргументы
     parser.add_argument('--vectorizer', type=str, default='tfidf',
                       help='Тип векторизатора (tfidf или rubert)')
@@ -153,9 +159,27 @@ def main():
                 print("Проверка данных...")
                 check_data()
             
+            # Обработка текстов
+            if args.normalize_texts:
+                print("Нормализация текстов...")
+                processor = DatabaseTextProcessor()
+                processor.process_all()
+                print("Нормализация текстов завершена")
+            
+            # Проверка нормализации текстов
+            if args.check_texts:
+                print("Проверка нормализации текстов...")
+                from src.db import get_db_connection
+                conn = get_db_connection()
+                try:
+                    check_normalized_texts(conn)
+                finally:
+                    conn.close()
+            
             # Если не указаны конкретные действия, выполняем полный цикл
             if not any([args.reset_db, args.init_db, args.load_data, args.load_competencies,
-                       args.load_labor_functions, args.load_curriculum, args.check_data]):
+                       args.load_labor_functions, args.load_curriculum, args.check_data,
+                       args.normalize_texts, args.check_texts]):
                 # Обработка текстов
                 print("Обработка текстов...")
                 processor = DatabaseTextProcessor()
