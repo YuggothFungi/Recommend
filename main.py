@@ -90,7 +90,8 @@ def main():
     db_group.add_argument('--reset-db', action='store_true', help='Сбросить базу данных')
     db_group.add_argument('--init-db', action='store_true', help='Инициализировать базу данных')
     db_group.add_argument('--load-data', action='store_true', help='Загрузить данные в базу')
-    db_group.add_argument('--check-data', action='store_true', help='Проверить загруженные данные')
+    db_group.add_argument('--check-data', action='store_true', help='Проверить загруженные данные (только количество записей)')
+    db_group.add_argument('--check-data-extended', action='store_true', help='Проверить загруженные данные (расширенный отчет)')
     
     # Группа аргументов для загрузки конкретных данных
     data_group = parser.add_argument_group('Загрузка конкретных данных')
@@ -156,8 +157,11 @@ def main():
             
             # Проверка данных
             if args.check_data:
-                print("Проверка данных...")
-                check_data()
+                print("Проверка данных (базовый режим)...")
+                check_data(extended=False)
+            elif args.check_data_extended:
+                print("Проверка данных (расширенный режим)...")
+                check_data(extended=True)
             
             # Обработка текстов
             if args.normalize_texts:
@@ -179,7 +183,7 @@ def main():
             # Если не указаны конкретные действия, выполняем полный цикл
             if not any([args.reset_db, args.init_db, args.load_data, args.load_competencies,
                        args.load_labor_functions, args.load_curriculum, args.check_data,
-                       args.normalize_texts, args.check_texts]):
+                       args.check_data_extended, args.normalize_texts, args.check_texts]):
                 # Обработка текстов
                 print("Обработка текстов...")
                 processor = DatabaseTextProcessor()
