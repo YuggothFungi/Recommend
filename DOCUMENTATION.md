@@ -41,7 +41,15 @@
 - Инициализация базы данных
 - Загрузка данных
 - Обработка текстов
-- Векторизация
+- TF-IDF векторизация
+- ruBERT векторизация
+- Расчет сходства между темами и трудовыми функциями
+
+Этот модуль является центральным компонентом системы, объединяющим все этапы обработки данных в единый процесс. Он обеспечивает:
+- Последовательное выполнение всех этапов обработки
+- Корректную инициализацию и обновление базы данных
+- Полную векторизацию текстов с использованием как TF-IDF, так и ruBERT
+- Расчет и сохранение метрик сходства
 
 ### src/data_loader.py
 Модуль для загрузки данных в базу данных:
@@ -208,7 +216,12 @@ python -m src.check_normalized_texts
 ## Основные таблицы
 | Таблица | Описание |
 |---------|----------|
-| `topics` | Учебные темы (название, часы, семестр) |
+| `disciplines` | Учебные дисциплины (название, цели, задачи) |
+| `semesters` | Семестры учебного года (1-8) |
+| `sections` | Разделы дисциплин (название, содержание) |
+| `lecture_topics` | Темы лекций (название, часы) |
+| `practical_topics` | Темы практических занятий (название, часы) |
+| `self_control_questions` | Вопросы для самоконтроля |
 | `competencies` | Компетенции (код, категория, описание) |
 | `labor_functions` | Трудовые функции (ID, уровень квалификации) |
 | `labor_components` | Универсальные компоненты (действия/умения/знания) |
@@ -217,9 +230,10 @@ python -m src.check_normalized_texts
 ## Таблицы связей
 | Таблица | Назначение |
 |---------|------------|
-| `topic_competency` | Связь тем и компетенций |
+| `discipline_semesters` | Связь дисциплин и семестров |
+| `discipline_competencies` | Связь дисциплин и компетенций |
 | `labor_function_components` | Связь функций и компонентов |
-| `topic_labor_function` | Результаты сопоставления (сходство) |
+| `specialty_labor_functions` | Связь специальностей и трудовых функций |
 
 ## Структура базы данных
 
@@ -229,24 +243,107 @@ python -m src.check_normalized_texts
 Таблица для хранения информации о дисциплинах.
 - `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор дисциплины
 - `name` (TEXT, NOT NULL) - название дисциплины
-- `competencies` (TEXT) - компетенции дисциплины
 - `goals` (TEXT) - цели дисциплины
 - `tasks` (TEXT) - задачи дисциплины
 - `nltk_normalized_name` (TEXT) - нормализованное название дисциплины
-- `nltk_normalized_competencies` (TEXT) - нормализованные компетенции
 - `nltk_normalized_goals` (TEXT) - нормализованные цели
 - `nltk_normalized_tasks` (TEXT) - нормализованные задачи
 - `rubert_vector` (BLOB) - векторное представление дисциплины
 
-#### topics
-Таблица для хранения тем дисциплин.
-- `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор темы
+#### semesters
+Таблица для хранения информации о семестрах.
+- `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор семестра
+- `number` (INTEGER, NOT NULL) - номер семестра (1-8)
+
+#### sections
+Таблица для хранения разделов дисциплин.
+- `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор раздела
 - `discipline_id` (INTEGER, FOREIGN KEY) - ссылка на дисциплину
-- `title` (TEXT, NOT NULL) - название темы
-- `description` (TEXT) - описание темы
-- `nltk_normalized_title` (TEXT) - нормализованное название темы
-- `nltk_normalized_description` (TEXT) - нормализованное описание темы
+- `semester_id` (INTEGER, FOREIGN KEY) - ссылка на семестр
+- `number` (INTEGER) - номер раздела
+- `name` (TEXT, NOT NULL) - название раздела
+- `content` (TEXT) - содержание раздела
+- `nltk_normalized_name` (TEXT) - нормализованное название
+- `nltk_normalized_content` (TEXT) - нормализованное содержание
+- `rubert_vector` (BLOB) - векторное представление раздела
+
+#### lecture_topics
+Таблица для хранения тем лекций.
+- `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор темы
+- `section_id` (INTEGER, FOREIGN KEY) - ссылка на раздел
+- `name` (TEXT, NOT NULL) - название темы
+- `hours` (REAL) - количество часов
+- `nltk_normalized_name` (TEXT) - нормализованное название
 - `rubert_vector` (BLOB) - векторное представление темы
+
+#### practical_topics
+Таблица для хранения тем практических занятий.
+- `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор темы
+- `section_id` (INTEGER, FOREIGN KEY) - ссылка на раздел
+- `name` (TEXT, NOT NULL) - название темы
+- `hours` (REAL) - количество часов
+- `nltk_normalized_name` (TEXT) - нормализованное название
+- `rubert_vector` (BLOB) - векторное представление темы
+
+#### self_control_questions
+Таблица для хранения вопросов для самоконтроля.
+- `id` (INTEGER, PRIMARY KEY) - уникальный идентификатор вопроса
+- `section_id` (INTEGER, FOREIGN KEY) - ссылка на раздел
+- `question` (TEXT, NOT NULL) - текст вопроса
+- `nltk_normalized_question` (TEXT) - нормализованный текст вопроса
+- `rubert_vector` (BLOB) - векторное представление вопроса
+
+### Таблицы связей
+
+#### topic_competency
+Связь между темами и компетенциями.
+- `topic_id` (INTEGER, FOREIGN KEY) - ссылка на тему
+- `competency_id` (INTEGER, FOREIGN KEY) - ссылка на компетенцию
+- PRIMARY KEY (topic_id, competency_id)
+
+#### labor_function_components
+Связь между трудовыми функциями и компонентами.
+- `labor_function_id` (TEXT, FOREIGN KEY) - ссылка на трудовую функцию
+- `component_id` (INTEGER, FOREIGN KEY) - ссылка на компонент
+- PRIMARY KEY (labor_function_id, component_id)
+
+#### topic_labor_function
+Результаты сопоставления тем и трудовых функций.
+- `topic_id` (INTEGER, FOREIGN KEY) - ссылка на тему
+- `labor_function_id` (TEXT, FOREIGN KEY) - ссылка на трудовую функцию
+- `tfidf_similarity` (REAL) - сходство по TF-IDF
+- `rubert_similarity` (REAL) - сходство по ruBERT
+- PRIMARY KEY (topic_id, labor_function_id)
+
+### Процесс загрузки данных
+
+1. Инициализация базы данных:
+   - Создание всех таблиц
+   - Предзаполнение таблицы `semesters` (8 записей для семестров 1-8)
+
+2. Загрузка компетенций:
+   - Чтение данных из `abilities.json`
+   - Нормализация текстов
+   - Сохранение в таблицу `competencies`
+
+3. Загрузка трудовых функций:
+   - Чтение данных из `prof_std.json`
+   - Нормализация текстов
+   - Сохранение в таблицу `labor_functions`
+   - Загрузка компонентов в `labor_components`
+   - Создание связей в `labor_function_components`
+
+4. Загрузка учебных планов:
+   - Чтение данных из файлов в директории `curriculum_disciplines`
+   - Создание записей в таблице `disciplines`
+   - Загрузка тем в таблицу `topics` с привязкой к семестрам
+   - Создание связей в `topic_competency`
+
+5. Векторизация и расчет сходства:
+   - TF-IDF векторизация всех текстов
+   - ruBERT векторизация
+   - Расчет сходства между темами и трудовыми функциями
+   - Сохранение результатов в `topic_labor_function`
 
 # Описание структуры фронтенда и API-роутов
 
