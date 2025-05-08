@@ -95,28 +95,26 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadSimilarities(id, type) {
         const threshold = thresholdSlider.value / 100;
         const url = `/api/similarities?${type}_id=${id}&threshold=${threshold}`;
-        
         try {
             console.log('Загрузка сходства:', { id, type, threshold, url });
             const response = await fetch(url);
             const data = await response.json();
             console.log('Полученные данные:', data);
-            
             // Проверяем наличие рекомендации
             let highlightAllLow = false;
-            if (data.recommendations && data.recommendations.some(r => r.includes('Тема не обеспечивает трудовые функции'))) {
+            let recommendations = data.recommendations || [];
+            if (type === 'labor_function' && (!data.results || data.results.length === 0)) {
+                recommendations = ['Для выбранной трудовой функции нет подходящих тем'];
+                highlightAllLow = true;
+            } else if (data.recommendations && data.recommendations.some(r => r.includes('Тема не обеспечивает трудовые функции'))) {
                 highlightAllLow = true;
             }
-            
-            // Обновляем таблицу в зависимости от типа
             if (type === 'topic') {
                 updateFunctionsTable(data.results);
             } else {
                 updateTopicsTable(data.results, highlightAllLow);
             }
-            
-            // Обновляем рекомендации
-            updateRecommendations(data.recommendations);
+            updateRecommendations(recommendations);
         } catch (error) {
             console.error('Ошибка при загрузке сходства:', error);
         }
@@ -221,7 +219,10 @@ document.addEventListener('DOMContentLoaded', function() {
         recommendations.forEach(rec => {
             const div = document.createElement('div');
             div.textContent = rec;
-            if (rec.includes('Тема не обеспечивает трудовые функции')) {
+            if (
+                rec.includes('Тема не обеспечивает трудовые функции') ||
+                rec.includes('Для выбранной трудовой функции нет подходящих тем')
+            ) {
                 div.classList.add('recommendation-warning');
             }
             recommendationsDiv.appendChild(div);
