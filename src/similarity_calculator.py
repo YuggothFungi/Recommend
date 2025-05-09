@@ -64,7 +64,7 @@ class SimilarityCalculator:
             entity_type: Тип сущности
             
         Returns:
-            dict: Словарь {entity_id: vector}
+            dict: Словарь {entity_id: {'tfidf': vector, 'rubert': vector}}
         """
         vectors = {}
         
@@ -83,8 +83,11 @@ class SimilarityCalculator:
                 if not np.isclose(norm, 1.0, rtol=1e-5):
                     logger.warning(f"Vector {entity_id} ({vector_type}) is not normalized. Norm: {norm}")
                     vector = vector / norm
-                    
-                vectors[entity_id] = vector
+                
+                if entity_id not in vectors:
+                    vectors[entity_id] = {'tfidf': None, 'rubert': None}
+                vectors[entity_id][vector_type] = vector
+                
             except Exception as e:
                 logger.error(f"Error loading vector {entity_id}: {str(e)}")
         
@@ -101,17 +104,35 @@ class SimilarityCalculator:
             function_vectors: Словарь векторов трудовых функций
             topic_type: Тип темы ('lecture' или 'practical')
         """
-        for topic_id, topic_vector in topic_vectors.items():
-            for function_id, function_vector in function_vectors.items():
-                similarity = np.dot(topic_vector, function_vector)
-                logger.debug(f"{topic_type} {topic_id} - Трудовая функция {function_id}: {similarity}")
-                
-                # Проверяем на nan и заменяем на 0.0
-                if np.isnan(similarity):
-                    similarity = 0.0
-                
+        for topic_id, topic_vector_dict in topic_vectors.items():
+            for function_id, function_vector_dict in function_vectors.items():
                 # Получаем часы для темы
                 hours = self._get_topic_hours(cursor, topic_id, topic_type)
+                
+                # Проверяем существующую запись
+                cursor.execute("""
+                    SELECT rubert_similarity, tfidf_similarity
+                    FROM similarity_results
+                    WHERE configuration_id = ? 
+                    AND topic_id = ? 
+                    AND topic_type = ? 
+                    AND labor_function_id = ?
+                """, (self.config.config_id, topic_id, topic_type, function_id))
+                
+                existing = cursor.fetchone()
+                rubert_similarity = existing[0] if existing else 0.0
+                tfidf_similarity = existing[1] if existing else 0.0
+                
+                # Рассчитываем сходство для каждого типа вектора
+                if topic_vector_dict['rubert'] is not None and function_vector_dict['rubert'] is not None:
+                    rubert_similarity = np.dot(topic_vector_dict['rubert'], function_vector_dict['rubert'])
+                    if np.isnan(rubert_similarity):
+                        rubert_similarity = 0.0
+                
+                if topic_vector_dict['tfidf'] is not None and function_vector_dict['tfidf'] is not None:
+                    tfidf_similarity = np.dot(topic_vector_dict['tfidf'], function_vector_dict['tfidf'])
+                    if np.isnan(tfidf_similarity):
+                        tfidf_similarity = 0.0
                 
                 # Сохраняем результат
                 cursor.execute("""
@@ -119,13 +140,18 @@ class SimilarityCalculator:
                     (configuration_id, topic_id, topic_type, labor_function_id, 
                      rubert_similarity, tfidf_similarity, topic_hours)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(configuration_id, topic_id, topic_type, labor_function_id) 
+                    DO UPDATE SET
+                        rubert_similarity = excluded.rubert_similarity,
+                        tfidf_similarity = excluded.tfidf_similarity,
+                        topic_hours = excluded.topic_hours
                 """, (
                     self.config.config_id,
                     topic_id,
                     topic_type,
                     function_id,
-                    float(similarity),
-                    0.0,  # TF-IDF схожесть пока не рассчитываем
+                    float(rubert_similarity),
+                    float(tfidf_similarity),
                     hours
                 ))
     

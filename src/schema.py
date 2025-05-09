@@ -279,6 +279,12 @@ def init_db():
         ON similarity_results(labor_function_id)
     """)
     
+    # Уникальный индекс для предотвращения дублирования записей
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_similarity_results_unique 
+        ON similarity_results(configuration_id, topic_id, topic_type, labor_function_id)
+    """)
+    
     # Предопределенные конфигурации
     cursor.execute("""
         INSERT OR IGNORE INTO vectorization_configurations (name, description, config_type) VALUES

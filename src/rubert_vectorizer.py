@@ -14,12 +14,12 @@ import pickle
 class RuBertVectorizer:
     """Векторизатор на основе ruBERT"""
     
-    def __init__(self, config: Optional[VectorizationConfig] = None, conn=None):
+    def __init__(self, config_id: int, conn=None):
         """
         Инициализация векторизатора
         
         Args:
-            config: Конфигурация векторизации (опционально)
+            config_id: ID конфигурации векторизации
             conn: Соединение с базой данных (опционально)
         """
         self.model_name = 'sberbank-ai/sbert_large_nlu_ru'
@@ -30,9 +30,8 @@ class RuBertVectorizer:
         self.model.eval()
         self.vector_size = 1024  # Размер вектора для sbert_large_nlu_ru
         self.db_conn = conn  # Использовать переданное соединение
-        self.config = config
-        if config is not None:
-            self.text_weights = VectorizationTextWeights(config)
+        self.config = VectorizationConfig(config_id)
+        self.text_weights = VectorizationTextWeights(self.config)
     
     def _mean_pooling(self, model_output, attention_mask):
         """Усреднение токенов для получения эмбеддинга предложения"""
@@ -178,6 +177,9 @@ class RuBertVectorizer:
         """Сохранение вектора в базу данных"""
         print(f"\n=== Сохранение вектора {entity_type} {entity_id} ===")
         
+        if not hasattr(self, 'config') or self.config is None:
+            raise ValueError("Конфигурация не задана при сохранении вектора")
+        
         # Проверяем нормализацию перед сохранением
         norm = np.linalg.norm(vector)
         print(f"Норма вектора перед сохранением: {norm}")
@@ -211,9 +213,12 @@ class RuBertVectorizer:
     
     def vectorize_all(self, conn=None) -> None:
         """Векторизация всех текстов в базе данных"""
-        if self.config is None:
+        if not hasattr(self, 'config') or self.config is None:
             raise ValueError("Конфигурация не задана")
-            
+        
+        if not hasattr(self, 'text_weights'):
+            raise ValueError("Не инициализированы веса текстов")
+        
         if conn is None:
             conn = get_db_connection()
             should_close = True
