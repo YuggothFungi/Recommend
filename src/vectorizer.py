@@ -9,6 +9,7 @@ import numpy as np
 from src.db import get_db_connection
 from src.vectorization_config import VectorizationConfig
 from src.vectorization_text_weights import VectorizationTextWeights
+import sqlite3
 
 class BaseVectorizer(ABC):
     """Абстрактный базовый класс для векторизаторов"""
@@ -57,7 +58,7 @@ class Vectorizer:
         if vectorizer_type == "tfidf":
             self.vectorizer = TfidfDatabaseVectorizer(config)
         elif vectorizer_type == "rubert":
-            self.vectorizer = RuBertVectorizer(config)
+            self.vectorizer = RuBertVectorizer(config=config)
         else:
             raise ValueError(f"Неизвестный тип векторизатора: {vectorizer_type}")
         
@@ -197,129 +198,122 @@ class Vectorizer:
         self.vectorizer._save_meta()
 
 def calculate_similarities(config: VectorizationConfig):
-    """
-    Рассчитывает сходство между темами и трудовыми функциями
+    """Расчет схожести между векторами"""
+    print("\n=== Начало расчета схожести ===")
     
-    Args:
-        config: Конфигурация векторизации
-    """
+    # Загрузка векторов
+    lecture_vectors = {}
+    practical_vectors = {}
+    labor_vectors = {}
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Получаем все векторы тем лекций
-    cursor.execute("""
-        SELECT entity_id, vector_data, vector_type
-        FROM vectorization_results
-        WHERE configuration_id = ? AND entity_type = 'lecture_topic'
-    """, (config.config_id,))
-    lecture_vectors = cursor.fetchall()
-    
-    # Получаем все векторы тем практик
-    cursor.execute("""
-        SELECT entity_id, vector_data, vector_type
-        FROM vectorization_results
-        WHERE configuration_id = ? AND entity_type = 'practical_topic'
-    """, (config.config_id,))
-    practical_vectors = cursor.fetchall()
-    
-    # Получаем все векторы трудовых функций
-    cursor.execute("""
-        SELECT entity_id, vector_data, vector_type
-        FROM vectorization_results
-        WHERE configuration_id = ? AND entity_type = 'labor_function'
-    """, (config.config_id,))
-    function_vectors = cursor.fetchall()
-    
-    # Группируем векторы по типу
-    lecture_vectors_by_type = {}
-    practical_vectors_by_type = {}
-    function_vectors_by_type = {}
-    
-    for topic_id, vector_data, vector_type in lecture_vectors:
-        if vector_type not in lecture_vectors_by_type:
-            lecture_vectors_by_type[vector_type] = []
-        lecture_vectors_by_type[vector_type].append((topic_id, np.frombuffer(vector_data)))
-    
-    for topic_id, vector_data, vector_type in practical_vectors:
-        if vector_type not in practical_vectors_by_type:
-            practical_vectors_by_type[vector_type] = []
-        practical_vectors_by_type[vector_type].append((topic_id, np.frombuffer(vector_data)))
-    
-    for function_id, vector_data, vector_type in function_vectors:
-        if vector_type not in function_vectors_by_type:
-            function_vectors_by_type[vector_type] = []
-        function_vectors_by_type[vector_type].append((function_id, np.frombuffer(vector_data)))
-    
-    # Получаем часы для тем
-    cursor.execute("SELECT id, hours FROM lecture_topics")
-    lecture_hours = {row[0]: row[1] for row in cursor.fetchall()}
-    
-    cursor.execute("SELECT id, hours FROM practical_topics")
-    practical_hours = {row[0]: row[1] for row in cursor.fetchall()}
-    
-    # Рассчитываем сходство для каждого типа векторов
-    for vector_type in ['tfidf', 'rubert']:
-        # Для лекционных тем
-        if vector_type in lecture_vectors_by_type and vector_type in function_vectors_by_type:
-            for topic_id, topic_vec in lecture_vectors_by_type[vector_type]:
-                for function_id, function_vec in function_vectors_by_type[vector_type]:
-                    # Для TF-IDF нормализуем векторы, для RuBERT они уже нормализованы
-                    if vector_type == 'tfidf':
-                        topic_vec_norm = topic_vec / np.linalg.norm(topic_vec)
-                        function_vec_norm = function_vec / np.linalg.norm(function_vec)
-                    else:
-                        topic_vec_norm = topic_vec
-                        function_vec_norm = function_vec
-                    
-                    # Считаем косинусное сходство
-                    similarity = float(np.dot(topic_vec_norm, function_vec_norm))
-                    
-                    # Сохраняем результат
-                    cursor.execute("""
-                        INSERT INTO similarity_results 
-                        (configuration_id, topic_id, topic_type, labor_function_id, 
-                         rubert_similarity, tfidf_similarity, topic_hours)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        config.config_id,
-                        topic_id,
-                        'lecture',
-                        function_id,
-                        similarity if vector_type == 'rubert' else 0.0,  # rubert_similarity
-                        similarity if vector_type == 'tfidf' else 0.0,  # tfidf_similarity
-                        lecture_hours.get(topic_id, 0)
-                    ))
+    try:
+        # Загрузка векторов лекций
+        cursor.execute("""
+            SELECT entity_id, vector_data 
+            FROM vectorization_results 
+            WHERE configuration_id = ? AND entity_type = 'lecture_topic' AND vector_type = 'rubert'
+        """, (config.config_id,))
         
-        # Для практических тем
-        if vector_type in practical_vectors_by_type and vector_type in function_vectors_by_type:
-            for topic_id, topic_vec in practical_vectors_by_type[vector_type]:
-                for function_id, function_vec in function_vectors_by_type[vector_type]:
-                    # Для TF-IDF нормализуем векторы, для RuBERT они уже нормализованы
-                    if vector_type == 'tfidf':
-                        topic_vec_norm = topic_vec / np.linalg.norm(topic_vec)
-                        function_vec_norm = function_vec / np.linalg.norm(function_vec)
-                    else:
-                        topic_vec_norm = topic_vec
-                        function_vec_norm = function_vec
-                    
-                    # Считаем косинусное сходство
-                    similarity = float(np.dot(topic_vec_norm, function_vec_norm))
-                    
-                    # Сохраняем результат
-                    cursor.execute("""
-                        INSERT INTO similarity_results 
-                        (configuration_id, topic_id, topic_type, labor_function_id, 
-                         rubert_similarity, tfidf_similarity, topic_hours)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        config.config_id,
-                        topic_id,
-                        'practical',
-                        function_id,
-                        similarity if vector_type == 'rubert' else 0.0,  # rubert_similarity
-                        similarity if vector_type == 'tfidf' else 0.0,  # tfidf_similarity
-                        practical_hours.get(topic_id, 0)
-                    ))
-    
-    conn.commit()
-    conn.close()
+        for entity_id, vector_bytes in cursor.fetchall():
+            try:
+                vector = np.frombuffer(vector_bytes, dtype=np.float32)
+                norm = np.linalg.norm(vector)
+                print(f"Лекция {entity_id}: норма = {norm}")
+                if not np.isclose(norm, 1.0, rtol=1e-5):
+                    print(f"Warning: Lecture vector {entity_id} is not normalized. Norm: {norm}")
+                    vector = vector / norm
+                lecture_vectors[entity_id] = vector
+            except Exception as e:
+                print(f"Error loading lecture vector {entity_id}: {str(e)}")
+        
+        # Загрузка векторов практик
+        cursor.execute("""
+            SELECT entity_id, vector_data 
+            FROM vectorization_results 
+            WHERE configuration_id = ? AND entity_type = 'practical_topic' AND vector_type = 'rubert'
+        """, (config.config_id,))
+        
+        for entity_id, vector_bytes in cursor.fetchall():
+            try:
+                vector = np.frombuffer(vector_bytes, dtype=np.float32)
+                norm = np.linalg.norm(vector)
+                print(f"Практика {entity_id}: норма = {norm}")
+                if not np.isclose(norm, 1.0, rtol=1e-5):
+                    print(f"Warning: Practical vector {entity_id} is not normalized. Norm: {norm}")
+                    vector = vector / norm
+                practical_vectors[entity_id] = vector
+            except Exception as e:
+                print(f"Error loading practical vector {entity_id}: {str(e)}")
+        
+        # Загрузка векторов трудовых функций
+        cursor.execute("""
+            SELECT entity_id, vector_data 
+            FROM vectorization_results 
+            WHERE configuration_id = ? AND entity_type = 'labor_function' AND vector_type = 'rubert'
+        """, (config.config_id,))
+        
+        for entity_id, vector_bytes in cursor.fetchall():
+            try:
+                vector = np.frombuffer(vector_bytes, dtype=np.float32)
+                norm = np.linalg.norm(vector)
+                print(f"Трудовая функция {entity_id}: норма = {norm}")
+                if not np.isclose(norm, 1.0, rtol=1e-5):
+                    print(f"Warning: Labor function vector {entity_id} is not normalized. Norm: {norm}")
+                    vector = vector / norm
+                labor_vectors[entity_id] = vector
+            except Exception as e:
+                print(f"Error loading labor function vector {entity_id}: {str(e)}")
+        
+        # Расчет схожести
+        print("\nРасчет схожести...")
+        
+        # Для лекций
+        for topic_id, topic_vector in lecture_vectors.items():
+            for function_id, function_vector in labor_vectors.items():
+                similarity = np.dot(topic_vector, function_vector)
+                print(f"Лекция {topic_id} - Трудовая функция {function_id}: {similarity}")
+                
+                # Сохраняем результат
+                cursor.execute("""
+                    INSERT INTO similarity_results 
+                    (configuration_id, topic_id, topic_type, labor_function_id, rubert_similarity, tfidf_similarity, topic_hours)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    config.config_id,
+                    topic_id,
+                    'lecture',
+                    function_id,
+                    float(similarity),
+                    0.0,  # TF-IDF схожесть пока не рассчитываем
+                    0.0   # Часы пока не учитываем
+                ))
+        
+        # Для практик
+        for topic_id, topic_vector in practical_vectors.items():
+            for function_id, function_vector in labor_vectors.items():
+                similarity = np.dot(topic_vector, function_vector)
+                print(f"Практика {topic_id} - Трудовая функция {function_id}: {similarity}")
+                
+                # Сохраняем результат
+                cursor.execute("""
+                    INSERT INTO similarity_results 
+                    (configuration_id, topic_id, topic_type, labor_function_id, rubert_similarity, tfidf_similarity, topic_hours)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    config.config_id,
+                    topic_id,
+                    'practical',
+                    function_id,
+                    float(similarity),
+                    0.0,  # TF-IDF схожесть пока не рассчитываем
+                    0.0   # Часы пока не учитываем
+                ))
+        
+        conn.commit()
+        print("\n=== Расчет схожести завершен ===")
+        
+    finally:
+        conn.close()

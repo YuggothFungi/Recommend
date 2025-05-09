@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoTokenizer, AutoModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import numpy as np
 import json
 import os
@@ -9,16 +9,17 @@ from src.db import get_db_connection
 from src.check_normalized_texts import check_normalized_texts
 from src.vectorization_config import VectorizationConfig
 from src.vectorization_text_weights import VectorizationTextWeights
+import pickle
 
 class RuBertVectorizer:
     """Векторизатор на основе ruBERT"""
     
-    def __init__(self, config: VectorizationConfig, conn=None):
+    def __init__(self, config: Optional[VectorizationConfig] = None, conn=None):
         """
         Инициализация векторизатора
         
         Args:
-            config: Конфигурация векторизации
+            config: Конфигурация векторизации (опционально)
             conn: Соединение с базой данных (опционально)
         """
         self.model_name = 'sberbank-ai/sbert_large_nlu_ru'
@@ -30,13 +31,36 @@ class RuBertVectorizer:
         self.vector_size = 1024  # Размер вектора для sbert_large_nlu_ru
         self.db_conn = conn  # Использовать переданное соединение
         self.config = config
-        self.text_weights = VectorizationTextWeights(config)
+        if config is not None:
+            self.text_weights = VectorizationTextWeights(config)
     
     def _mean_pooling(self, model_output, attention_mask):
         """Усреднение токенов для получения эмбеддинга предложения"""
         token_embeddings = model_output[0]
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+        
+        # Проверка на нулевые маски
+        if torch.all(input_mask_expanded == 0):
+            print("Warning: All tokens are masked out")
+            return torch.zeros_like(token_embeddings[:, 0])
+        
+        # Усреднение с учетом маски
+        sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+        
+        # Проверка на нулевые суммы
+        if torch.any(sum_mask == 0):
+            print("Warning: Zero sum mask detected")
+            sum_mask = torch.where(sum_mask == 0, torch.ones_like(sum_mask), sum_mask)
+        
+        mean_embeddings = sum_embeddings / sum_mask
+        
+        # Проверка на NaN и Inf
+        if torch.isnan(mean_embeddings).any() or torch.isinf(mean_embeddings).any():
+            print("Warning: NaN or Inf values in mean embeddings")
+            mean_embeddings = torch.nan_to_num(mean_embeddings, nan=0.0, posinf=1.0, neginf=-1.0)
+        
+        return mean_embeddings
     
     def fit(self, texts: List[str]) -> None:
         """Обучение векторизатора (не требуется для BERT)"""
@@ -46,6 +70,9 @@ class RuBertVectorizer:
         """Преобразование текстов в векторы"""
         if not texts:
             return np.array([])
+        
+        print("\n=== Начало векторизации ===")
+        print(f"Количество текстов: {len(texts)}")
         
         # Токенизация
         encoded_input = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors='pt')
@@ -57,12 +84,43 @@ class RuBertVectorizer:
         
         # Усреднение токенов
         sentence_embeddings = self._mean_pooling(model_output, encoded_input['attention_mask'])
+        print("\nПосле mean_pooling:")
+        norms = torch.norm(sentence_embeddings, p=2, dim=1)
+        print(f"Нормы векторов: {norms}")
+        
+        # Проверка на NaN и Inf
+        if torch.isnan(sentence_embeddings).any() or torch.isinf(sentence_embeddings).any():
+            print("Warning: NaN or Inf values detected in embeddings")
+            sentence_embeddings = torch.nan_to_num(sentence_embeddings, nan=0.0, posinf=1.0, neginf=-1.0)
         
         # Нормализация векторов
         sentence_embeddings = torch.nn.functional.normalize(sentence_embeddings, p=2, dim=1)
+        print("\nПосле torch.nn.functional.normalize:")
+        norms = torch.norm(sentence_embeddings, p=2, dim=1)
+        print(f"Нормы векторов: {norms}")
         
-        # Преобразование в numpy
-        return sentence_embeddings.cpu().numpy()
+        # Проверка нормализации
+        if not torch.allclose(norms, torch.ones_like(norms), rtol=1e-5):
+            print(f"Warning: Vectors are not properly normalized. Norms: {norms}")
+            # Принудительная нормализация
+            sentence_embeddings = sentence_embeddings / norms.unsqueeze(1)
+            print("\nПосле принудительной нормализации:")
+            norms = torch.norm(sentence_embeddings, p=2, dim=1)
+            print(f"Нормы векторов: {norms}")
+        
+        # Преобразование в numpy с проверкой
+        numpy_embeddings = sentence_embeddings.cpu().numpy()
+        print("\nПосле преобразования в numpy:")
+        for i, vec in enumerate(numpy_embeddings):
+            norm = np.linalg.norm(vec)
+            print(f"Вектор {i}, норма: {norm}")
+            if not np.isclose(norm, 1.0, rtol=1e-5):
+                print(f"Warning: Vector {i} is not normalized after numpy conversion. Norm: {norm}")
+                numpy_embeddings[i] = vec / norm
+                print(f"После нормализации, норма: {np.linalg.norm(numpy_embeddings[i])}")
+        
+        print("=== Конец векторизации ===\n")
+        return numpy_embeddings
     
     def fit_transform(self, texts: List[str]) -> np.ndarray:
         """Обучение и преобразование текстов в векторы"""
@@ -118,7 +176,24 @@ class RuBertVectorizer:
     
     def _save_vector(self, cursor, entity_type: str, entity_id: int, vector: np.ndarray) -> None:
         """Сохранение вектора в базу данных"""
+        print(f"\n=== Сохранение вектора {entity_type} {entity_id} ===")
+        
+        # Проверяем нормализацию перед сохранением
+        norm = np.linalg.norm(vector)
+        print(f"Норма вектора перед сохранением: {norm}")
+        
+        if not np.isclose(norm, 1.0, rtol=1e-5):
+            print(f"Warning: Vector for {entity_type} {entity_id} is not normalized before saving. Norm: {norm}")
+            vector = vector / norm
+            print(f"Норма после нормализации: {np.linalg.norm(vector)}")
+        
+        # Убеждаемся, что вектор в float32
+        vector = vector.astype(np.float32)
+        print(f"Тип данных вектора: {vector.dtype}")
+        
+        # Сохраняем вектор в бинарном формате
         vector_bytes = vector.tobytes()
+        print(f"Размер вектора в байтах: {len(vector_bytes)}")
         
         # Сохраняем в vectorization_results
         cursor.execute("""
@@ -132,9 +207,13 @@ class RuBertVectorizer:
             'rubert',
             vector_bytes
         ))
+        print("=== Вектор сохранен ===\n")
     
     def vectorize_all(self, conn=None) -> None:
         """Векторизация всех текстов в базе данных"""
+        if self.config is None:
+            raise ValueError("Конфигурация не задана")
+            
         if conn is None:
             conn = get_db_connection()
             should_close = True

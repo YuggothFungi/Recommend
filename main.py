@@ -241,7 +241,10 @@ def main():
                 vectorizer = Vectorizer(config=config, vectorizer_type=args.vectorizer)
             else:
                 logger.info(f"Векторизация с использованием {args.vectorizer}...")
-                vectorizer = Vectorizer(vectorizer_type=args.vectorizer)
+                # Создаем конфигурацию по умолчанию
+                config = VectorizationConfig(1)  # Используем первую конфигурацию по умолчанию
+                config.vectorizer_type = args.vectorizer
+                vectorizer = Vectorizer(config=config, vectorizer_type=args.vectorizer)
             
             vectorizer.vectorize_all()
             

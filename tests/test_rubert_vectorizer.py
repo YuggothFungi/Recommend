@@ -75,6 +75,13 @@ def test_get_similarity(vectorizer, test_texts):
     
     # Проверяем диапазон значений
     assert 0 <= similarity <= 1
+    
+    # Проверяем, что разные тексты не имеют сходство = 1
+    assert similarity < 0.99, f"Similarity between different texts is too high: {similarity}"
+    
+    # Проверяем сходство текста с самим собой
+    self_similarity = vectorizer.get_similarity(test_texts[0], test_texts[0])
+    assert abs(self_similarity - 1.0) < 1e-6, f"Self-similarity is not 1.0: {self_similarity}"
 
 def test_vectorize_table(vectorizer, db_connection):
     """Тест метода _vectorize_table"""
