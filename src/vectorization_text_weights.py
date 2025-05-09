@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Optional, Tuple
 import sqlite3
-from src.db import get_db_connection
-from src.vectorization_config import VectorizationConfig, VectorizationWeight
+from db import get_db_connection
+from vectorization_config import VectorizationConfig, VectorizationWeight
 
 class VectorizationTextWeights:
     """Класс для подготовки текста с учетом весов при векторизации"""

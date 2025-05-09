@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Главный файл запуска приложения.
-Проверяет зависимости и запускает основную логику из src/data_processor.py
+Проверяет зависимости и запускает основную логику
 """
 
 import sys
@@ -9,18 +9,18 @@ import pkg_resources
 import subprocess
 from pathlib import Path
 import argparse
-from src.text_processor import DatabaseTextProcessor
-from src.vectorizer import Vectorizer
-from src.data_loader import load_all_data, load_competencies, load_labor_functions, load_curriculum
-from src.check_data import check_data
-from src.check_vectors import check_vectors
-from src.check_similarities import check_similarities
-from src.check_normalized_texts import check_normalized_texts
-from src.download_nltk_data import setup_nltk
-from src.data_processor import process_data
-from src.schema import init_db, reset_db
-from src.vectorization_config import VectorizationConfig
-from src.check_db import check_database
+from text_processor import DatabaseTextProcessor
+from vectorizer import Vectorizer
+from data_loader import load_all_data, load_competencies, load_labor_functions, load_curriculum
+from check_data import check_data
+from check_vectors import check_vectors
+from check_similarities import check_similarities
+from check_normalized_texts import check_normalized_texts
+from download_nltk_data import setup_nltk
+from data_processor import process_data
+from schema import init_db, reset_db
+from vectorization_config import VectorizationConfig
+from check_db import check_database
 import os
 import logging
 
@@ -58,7 +58,7 @@ def check_dependencies():
     
     if missing:
         logger.info("\nУстановка отсутствующих зависимостей...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "../requirements.txt"])
         logger.info("✓ Зависимости установлены")
 
 def print_vectorization_configs():
@@ -70,7 +70,7 @@ def print_vectorization_configs():
         logger.info(f"Тип: {config.config_type}")
         logger.info(f"Описание: {config.description}")
         logger.info("Веса:")
-        for weight in config.weights:
+        for weight in config.weights.values():
             logger.info(f"  - {weight.entity_type}.{weight.source_type}: {weight.weight}")
             if weight.hours_weight:
                 logger.info(f"    Часы: {weight.hours_weight}")
@@ -103,11 +103,12 @@ def main():
     
     # Группа аргументов для векторизации
     vectorization_group = parser.add_argument_group('Векторизация')
-    vectorization_group.add_argument('--vectorizer', type=str, default='tfidf',
+    vectorization_group.add_argument('--vectorizer', type=str,
                       help='Тип векторизатора (tfidf или rubert)')
     vectorization_group.add_argument('--config-id', type=int, help='ID конфигурации векторизации')
     vectorization_group.add_argument('--list-configs', action='store_true', help='Показать список доступных конфигураций')
     vectorization_group.add_argument('--check-vectors', type=int, help='Проверить векторы для указанной конфигурации')
+    vectorization_group.add_argument('--calculate-similarities', action='store_true', help='Запустить расчет сходств')
     
     # Группа аргументов для веб-интерфейса
     web_group = parser.add_argument_group('Веб-интерфейс')
@@ -119,10 +120,6 @@ def main():
     parser.add_argument('--full-cycle', action='store_true', help='Выполнить полный цикл обработки')
     
     args = parser.parse_args()
-    
-    # Добавляем корневую директорию в PYTHONPATH
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    sys.path.append(root_dir)
     
     try:
         # Проверяем зависимости
@@ -198,61 +195,43 @@ def main():
         if args.check_data:
             logger.info("Проверка данных...")
             check_data()
+            logger.info("Проверка данных завершена")
         elif args.check_data_extended:
             logger.info("Расширенная проверка данных...")
-            from src.db import get_db_connection
-            conn = get_db_connection()
-            try:
-                check_data(conn, extended=True)
-            finally:
-                conn.close()
+            check_data(extended=True)
+            logger.info("Расширенная проверка данных завершена")
         
-        # Нормализация текстов
+        # Обработка текстов
         if args.normalize_texts:
             logger.info("Нормализация текстов...")
-            processor = DatabaseTextProcessor()
-            processor.process_all()
+            text_processor = DatabaseTextProcessor()
+            text_processor.process_all()
             logger.info("Нормализация текстов завершена")
-        
-        # Проверка нормализации текстов
-        if args.check_texts:
+        elif args.check_texts:
             logger.info("Проверка нормализации текстов...")
-            from src.db import get_db_connection
-            conn = get_db_connection()
-            try:
-                check_normalized_texts(conn)
-            finally:
-                conn.close()
+            check_normalized_texts()
+            logger.info("Проверка нормализации текстов завершена")
         
-        # Если не указаны конкретные действия, выполняем полный цикл
-        if not any([args.reset_db, args.init_db, args.load_data, args.load_competencies,
-                   args.load_labor_functions, args.load_curriculum, args.check_data,
-                   args.check_data_extended, args.normalize_texts, args.check_texts]):
-            # Обработка текстов
-            logger.info("Обработка текстов...")
-            processor = DatabaseTextProcessor()
-            processor.process_all()
-            
-            # Векторизация
-            if args.config_id:
-                logger.info(f"Векторизация с использованием конфигурации {args.config_id} и алгоритма {args.vectorizer}...")
-                config = VectorizationConfig(args.config_id)
-                config.vectorizer_type = args.vectorizer
-                vectorizer = Vectorizer(config=config, vectorizer_type=args.vectorizer)
-            else:
-                logger.info(f"Векторизация с использованием {args.vectorizer}...")
-                # Создаем конфигурацию по умолчанию
-                config = VectorizationConfig(1)  # Используем первую конфигурацию по умолчанию
-                config.vectorizer_type = args.vectorizer
-                vectorizer = Vectorizer(config=config, vectorizer_type=args.vectorizer)
-            
+        # Векторизация
+        if args.vectorizer:
+            logger.info(f"Векторизация с использованием {args.vectorizer}...")
+            if not args.config_id:
+                raise ValueError("Для векторизации необходимо указать ID конфигурации (--config-id)")
+            vectorizer = Vectorizer(vectorizer_type=args.vectorizer, config_id=args.config_id)
             vectorizer.vectorize_all()
-            
-            # Расчет сходства
-            logger.info("Расчет сходства между темами и трудовыми функциями...")
-            from src.vectorizer import calculate_similarities
-            calculate_similarities(config)
-    
+            logger.info("Векторизация завершена")
+        
+        # Расчет сходств
+        if args.calculate_similarities:
+            logger.info("Расчет сходств...")
+            if not args.config_id:
+                raise ValueError("Для расчета сходств необходимо указать ID конфигурации (--config-id)")
+            from similarity_calculator import SimilarityCalculator
+            config = VectorizationConfig(args.config_id)
+            calculator = SimilarityCalculator(config)
+            calculator.calculate_similarities()
+            logger.info("Расчет сходств завершен")
+        
     except Exception as e:
         logger.error(f"Ошибка: {str(e)}")
         sys.exit(1)

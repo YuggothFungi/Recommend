@@ -1,12 +1,13 @@
+import os
+import logging
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 import re
-from src.db import get_db_connection
+from db import get_db_connection
 import pymorphy2
-from src.domain_phrases import DOMAIN_PHRASES, LEMMATIZATION_EXCEPTIONS
-from .metrics import MetricsAnalyzer
-import logging
+from domain_phrases import DOMAIN_PHRASES, LEMMATIZATION_EXCEPTIONS
+from metrics import MetricsAnalyzer
 
 logger = logging.getLogger(__name__)
 

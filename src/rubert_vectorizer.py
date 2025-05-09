@@ -5,10 +5,10 @@ import numpy as np
 import json
 import os
 import sqlite3
-from src.db import get_db_connection
-from src.check_normalized_texts import check_normalized_texts
-from src.vectorization_config import VectorizationConfig
-from src.vectorization_text_weights import VectorizationTextWeights
+from db import get_db_connection
+from check_normalized_texts import check_normalized_texts
+from vectorization_config import VectorizationConfig
+from vectorization_text_weights import VectorizationTextWeights
 import pickle
 
 class RuBertVectorizer:

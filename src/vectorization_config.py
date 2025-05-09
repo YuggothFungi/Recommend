@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Optional
-from src.db import get_db_connection
+from db import get_db_connection
 
 @dataclass
 class VectorizationWeight:
@@ -12,17 +12,20 @@ class VectorizationWeight:
     hours_weight: Optional[float] = None  # Вес для часов (опционально)
 
 class VectorizationConfig:
-    """Класс для управления конфигурациями векторизации"""
+    """Класс для работы с конфигурацией векторизации"""
     
     def __init__(self, config_id: int):
         """
         Инициализация конфигурации
         
         Args:
-            config_id: ID конфигурации в базе данных
+            config_id: ID конфигурации
         """
         self.config_id = config_id
-        self.vectorizer_type = None  # Тип векторизатора (tfidf или rubert)
+        self.name = None
+        self.description = None
+        self.config_type = None
+        self.weights = {}
         self._load_config()
     
     def _load_config(self):
@@ -30,20 +33,20 @@ class VectorizationConfig:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Загружаем основную информацию о конфигурации
+        # Загрузка основной информации о конфигурации
         cursor.execute("""
             SELECT name, description, config_type
             FROM vectorization_configurations
             WHERE id = ?
         """, (self.config_id,))
         
-        config = cursor.fetchone()
-        if not config:
+        row = cursor.fetchone()
+        if not row:
             raise ValueError(f"Конфигурация с ID {self.config_id} не найдена")
-        
-        self.name = config[0]
-        self.description = config[1]
-        self.config_type = config[2]
+            
+        self.name = row[0]
+        self.description = row[1]
+        self.config_type = row[2]
         
         # Загружаем веса
         cursor.execute("""
@@ -53,7 +56,7 @@ class VectorizationConfig:
             ORDER BY entity_type, source_type
         """, (self.config_id,))
         
-        self.weights = []
+        self.weights = {}
         for row in cursor.fetchall():
             weight = VectorizationWeight(
                 entity_type=row[0],
@@ -62,7 +65,7 @@ class VectorizationConfig:
                 weight=float(row[3]),
                 hours_weight=float(row[4]) if row[4] is not None else None
             )
-            self.weights.append(weight)
+            self.weights[f"{weight.entity_type}_{weight.source_type}"] = weight
         
         conn.close()
     
@@ -90,10 +93,7 @@ class VectorizationConfig:
         Returns:
             VectorizationWeight или None, если вес не найден
         """
-        for weight in self.weights:
-            if weight.entity_type == entity_type and weight.source_type == source_type:
-                return weight
-        return None
+        return self.weights.get(f"{entity_type}_{source_type}")
         
     def get_entity_weights(self, entity_type: str) -> List[VectorizationWeight]:
         """
@@ -105,4 +105,4 @@ class VectorizationConfig:
         Returns:
             List[VectorizationWeight]: Список весов для указанного типа сущности
         """
-        return [weight for weight in self.weights if weight.entity_type == entity_type] 
+        return [weight for key, weight in self.weights.items() if key.startswith(f"{entity_type}_")] 

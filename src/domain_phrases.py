@@ -1,3 +1,7 @@
+import os
+import logging
+from db import get_db_connection
+
 # Словарь тематических словосочетаний
 DOMAIN_PHRASES = {
     'база данных': 'база данных',

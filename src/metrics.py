@@ -2,12 +2,16 @@
 Модуль для расчета и анализа метрик качества системы.
 """
 
+import os
+import logging
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from db import get_db_connection
 import numpy as np
 from typing import List, Dict, Tuple
 from datetime import datetime
-import logging
 from collections import defaultdict
-import os
 import json
 
 logger = logging.getLogger(__name__)

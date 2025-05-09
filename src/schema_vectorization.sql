@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS similarity_results (
     topic_id INTEGER NOT NULL,
     topic_type TEXT NOT NULL CHECK (topic_type IN ('lecture', 'practical')),
     labor_function_id TEXT NOT NULL,
-    rubert_similarity REAL NOT NULL,
-    tfidf_similarity REAL NOT NULL,
+    rubert_similarity REAL,
+    tfidf_similarity REAL,
     topic_hours REAL NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (configuration_id) REFERENCES vectorization_configurations(id) ON DELETE CASCADE

@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 
 # Добавляем корневую директорию в PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -8,12 +9,14 @@ from datetime import datetime
 from src.schema import init_db
 from src.data_loader import load_all_data
 from src.text_processor import DatabaseTextProcessor
-from src.tfidf_vectorizer import TfidfDatabaseVectorizer
-from src.rubert_vectorizer import RuBertVectorizer
-from src.vectorizer import calculate_similarities
+from src.vectorizer import Vectorizer
+from src.similarity_calculator import SimilarityCalculator
+from src.vectorization_config import VectorizationConfig
+
+logger = logging.getLogger(__name__)
 
 def process_data():
-    """Главная точка входа для обработки данных"""
+    """Полный цикл обработки данных"""
     print("=" * 50)
     print(f"Начало обработки данных: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 50)
@@ -30,26 +33,22 @@ def process_data():
         print("✓ Данные успешно загружены")
         
         # 3. Обработка текстов
-        print("\n3. Обработка текстов...")
-        text_processor = DatabaseTextProcessor()
-        text_processor.process_all()
+        logger.info("Обработка текстов...")
+        processor = DatabaseTextProcessor()
+        processor.process_all()
         print("✓ Тексты успешно обработаны")
         
-        # 4. Векторизация TF-IDF
-        print("\n4. Векторизация TF-IDF...")
-        tfidf_vectorizer = TfidfDatabaseVectorizer()
-        tfidf_vectorizer.vectorize_all()
-        print("✓ TF-IDF векторизация успешно завершена")
+        # 4. Векторизация
+        logger.info("Векторизация...")
+        config = VectorizationConfig(1)  # Используем первую конфигурацию по умолчанию
+        vectorizer = Vectorizer(config)
+        vectorizer.vectorize_all()
+        print("✓ Векторизация успешно завершена")
         
-        # 5. Векторизация ruBERT
-        print("\n5. Векторизация ruBERT...")
-        rubert_vectorizer = RuBertVectorizer()
-        rubert_vectorizer.vectorize_all()
-        print("✓ ruBERT векторизация успешно завершена")
-        
-        # 6. Расчет сходства
-        print("\n6. Расчет сходства...")
-        calculate_similarities()
+        # 5. Расчет сходств
+        logger.info("Расчет сходств...")
+        similarity_calculator = SimilarityCalculator(config)
+        similarity_calculator.calculate_similarities()
         print("✓ Расчет сходства успешно завершен")
         
         print("\n" + "=" * 50)
