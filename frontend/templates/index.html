@@ -1,90 +1,64 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Рекомендательная система</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Рекомендательная система</h1>
-            <div class="controls">
-                <div class="discipline-select">
-                    <label for="discipline">Дисциплина:</label>
-                    <select id="discipline">
-                        <option value="">Выберите дисциплину...</option>
-                    </select>
-                </div>
-                <div class="similarity-threshold">
-                    <label for="threshold">Порог сходства:</label>
-                    <input type="range" id="threshold" min="0" max="100" value="50" step="5">
-                    <span id="threshold-value">0.50</span>
-                </div>
-                <div class="similarity-type">
-                    <label for="similarity-type">Метод векторизации:</label>
-                    <select id="similarity-type">
-                        <option value="rubert">ruBERT</option>
-                        <option value="tfidf">TF-IDF</option>
-                    </select>
-                </div>
-                <div class="сonfiguration-type">
-                    <label for="configuration-id">Конфигурация:</label>
-                    <select id="configuration-id">
-                        <option value="">Выберите конфигурацию...</option>
-                    </select>
-                </div>
-            </div>
-        </header>
-
-        <main>
-            <div class="split-view">
-                <div class="panel topics-panel">
-                    <h2>Темы</h2>
-                    <div class="table-container">
-                        <table id="topics-table">
-                            <thead>
-                                <tr>
-                                    <th style="min-width: 40px; max-width: 60px;">Тип</th>
-                                    <th style="width: 100%;">Название темы</th>
-                                    <th style="min-width: 40px; max-width: 60px;">Часы</th>
-                                    <th style="min-width: 60px; max-width: 80px;">Сходство</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Темы будут добавлены через JavaScript -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="panel functions-panel">
-                    <h2>Трудовые функции</h2>
-                    <div class="table-container">
-                        <table id="functions-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 80%;">Название функции</th>
-                                    <th style="min-width: 60px; max-width: 80px;">Сходство</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Трудовые функции будут добавлены через JavaScript -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="recommendations-panel">
-                <h2>Рекомендации</h2>
-                <div id="recommendations">
-                    <!-- Рекомендации будут добавлены через JavaScript -->
-                </div>
-            </div>
-        </main>
+    <div class="controls">
+        <select id="discipline">
+            <option value="">Выберите дисциплину</option>
+        </select>
+        
+        <label>
+            Порог сходства:
+            <input type="range" id="threshold" min="0" max="100" value="30">
+            <span id="threshold-value">0.30</span>
+        </label>
+        
+        <select id="similarity-type">
+            <option value="rubert">ruBERT</option>
+            <option value="tfidf">TF-IDF</option>
+        </select>
+        
+        <select id="configuration-id">
+            <option value="">Выберите конфигурацию</option>
+        </select>
     </div>
+
+    <div class="main-content">
+        <div class="tables-container">
+            <div class="table-container">
+                <div class="table-header">Учебные темы</div>
+                <table id="topics-table">
+                    <thead>
+                        <tr>
+                            <th>Тип</th>
+                            <th>Название</th>
+                            <th>Часы</th>
+                            <th>Сходство</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            
+            <div class="table-container">
+                <div class="table-header">Трудовые функции</div>
+                <table id="functions-table">
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Сходство</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="recommendations"></div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

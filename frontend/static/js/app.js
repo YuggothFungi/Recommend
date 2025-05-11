@@ -163,6 +163,42 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Функция загрузки сравнения сходства и рекомендаций
+    async function loadSimilarityComparison(topicId) {
+        try {
+            log('Загрузка сравнения сходства для темы:', topicId);
+            const url = `/api/similarity-comparison?topic_id=${topicId}`;
+            log('URL запроса:', url);
+            
+            const response = await fetch(url);
+            log('Статус ответа:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            log('Полученные данные сравнения:', data);
+            
+            if (data.error) {
+                log('Ошибка от сервера:', data.error);
+                return;
+            }
+            
+            if (data.recommendations && Array.isArray(data.recommendations)) {
+                log('Количество рекомендаций:', data.recommendations.length);
+                log('Рекомендации:', data.recommendations);
+                updateRecommendations(data.recommendations);
+            } else {
+                log('Нет рекомендаций в ответе');
+                updateRecommendations([]);
+            }
+        } catch (error) {
+            log('Ошибка при загрузке сравнения сходства:', error);
+            alert('Ошибка при загрузке сравнения сходства');
+        }
+    }
+
     // Обработчик клика по строке функции
     functionsTable.onclick = function(event) {
         const row = event.target.closest('tr');
@@ -271,7 +307,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Модифицируем updateTopicsTable для выделения выбранной строки, дефиса в сходстве и отображения hours
+    // Обновляем функцию handleTopicClick
+    function handleTopicClick(topicId) {
+        log('Обработка клика по теме:', topicId);
+        
+        // Снимаем выделение с предыдущей выбранной темы
+        if (selectedTopicId) {
+            const prevRow = document.querySelector(`#topics-table tr[data-id="${selectedTopicId}"]`);
+            if (prevRow) prevRow.classList.remove('selected');
+        }
+        
+        // Выделяем новую тему
+        const row = document.querySelector(`#topics-table tr[data-id="${topicId}"]`);
+        if (row) row.classList.add('selected');
+        
+        selectedTopicId = topicId;
+        selectedFunctionId = null;
+        
+        // Загружаем сходство и рекомендации
+        loadSimilarities(topicId);
+        loadSimilarityComparison(topicId);
+    }
+
+    // Обновляем обработчик клика по строке темы в updateTopicsTable
     function updateTopicsTable(topics, showSimilarity = false) {
         log('Обновление таблицы тем:', topics);
         topicsTable.innerHTML = '';
@@ -291,14 +349,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td style="min-width: 60px; max-width: 80px;">${selectedTopicId === topic.id ? '-' : (showSimilarity && typeof topic.similarity === 'number' ? topic.similarity.toFixed(2) : '-')}</td>
             `;
             if (selectedTopicId === topic.id) row.classList.add('selected');
-            row.onclick = () => {
-                selectedTopicId = topic.id;
-                selectedFunctionId = null;
-                // Снимаем выделение со всех строк
-                Array.from(topicsTable.children).forEach(r => r.classList.remove('selected'));
-                row.classList.add('selected');
-                loadSimilarities(topic.id);
-            };
+            row.onclick = () => handleTopicClick(topic.id);
             topicsTable.appendChild(row);
         });
     }
@@ -323,16 +374,23 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Функция обновления рекомендаций
+    // Обновляем функцию updateRecommendations
     function updateRecommendations(recommendations) {
         log('Обновление рекомендаций:', recommendations);
         recommendationsDiv.innerHTML = '';
+        
+        if (!recommendations || recommendations.length === 0) {
+            const div = document.createElement('div');
+            div.textContent = 'Нет рекомендаций по улучшению формулировок';
+            div.classList.add('recommendation-info');
+            recommendationsDiv.appendChild(div);
+            return;
+        }
+        
         recommendations.forEach(rec => {
             const div = document.createElement('div');
-            div.textContent = rec;
-            if (rec.includes('не обеспечивает') || rec.includes('нет подходящих')) {
-                div.classList.add('recommendation-warning');
-            }
+            div.textContent = rec.message;
+            div.classList.add(`recommendation-${rec.type}`);
             recommendationsDiv.appendChild(div);
         });
     }
@@ -373,22 +431,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (selectedFunctionId) {
             loadSimilarities(selectedFunctionId);
         }
-    }
-
-    function handleTopicClick(topicId) {
-        // Снимаем выделение с предыдущей выбранной темы
-        if (selectedTopicId) {
-            const prevRow = document.querySelector(`#topics-table tr[data-topic-id="${selectedTopicId}"]`);
-            if (prevRow) prevRow.classList.remove('selected');
-        }
-        
-        // Выделяем новую тему
-        const row = document.querySelector(`#topics-table tr[data-topic-id="${topicId}"]`);
-        if (row) row.classList.add('selected');
-        
-        selectedTopicId = topicId;
-        selectedFunctionId = null;
-        loadSimilarities(topicId);
     }
 
     function handleFunctionClick(functionId) {

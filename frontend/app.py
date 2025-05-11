@@ -11,7 +11,13 @@ from flask import Flask, render_template, jsonify, request
 from src.db import get_db_connection
 
 # Настройка логирования
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -207,6 +213,130 @@ def get_configurations():
         return jsonify(configs)
     except Exception as e:
         logger.error(f"Ошибка при получении конфигураций: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+def analyze_similarity_comparison(comparison, threshold=0.3):
+    """
+    Анализирует сравнение сходства и формирует рекомендации.
+    
+    Args:
+        comparison (list): Список сравнений сходства
+        threshold (float): Порог разницы для формирования рекомендации
+        
+    Returns:
+        list: Список рекомендаций
+    """
+    logger.debug(f"Анализ сравнения сходства. Количество сравнений: {len(comparison)}")
+    recommendations = []
+    
+    for comp in comparison:
+        logger.debug(f"Анализ сравнения: TF-IDF={comp['tfidf_score']:.2f}, ruBERT={comp['rubert_score']:.2f}")
+        
+        # Если ruBERT показывает высокое сходство, а TF-IDF низкое
+        if comp['rubert_score'] > 0.7 and comp['tfidf_score'] < 0.2:
+            logger.debug(f"Обнаружено расхождение: ruBERT высокое, TF-IDF низкое")
+            recommendations.append({
+                'type': 'warning',
+                'message': f"Для трудовой функции '{comp['function_name']}' обнаружено расхождение в оценках сходства: "
+                          f"ruBERT ({comp['rubert_score']:.2f}) показывает высокое сходство, "
+                          f"а TF-IDF ({comp['tfidf_score']:.2f}) - низкое. "
+                          f"Рекомендуется уточнить формулировку темы для лучшего соответствия."
+            })
+        # Если TF-IDF показывает высокое сходство, а ruBERT низкое
+        elif comp['tfidf_score'] > 0.7 and comp['rubert_score'] < 0.2:
+            logger.debug(f"Обнаружено расхождение: TF-IDF высокое, ruBERT низкое")
+            recommendations.append({
+                'type': 'warning',
+                'message': f"Для трудовой функции '{comp['function_name']}' обнаружено расхождение в оценках сходства: "
+                          f"TF-IDF ({comp['tfidf_score']:.2f}) показывает высокое сходство, "
+                          f"а ruBERT ({comp['rubert_score']:.2f}) - низкое. "
+                          f"Рекомендуется переформулировать тему с использованием более точных терминов."
+            })
+        # # Если разница между оценками значительная
+        # elif comp['difference'] > threshold:
+        #     logger.debug(f"Обнаружена значительная разница: {comp['difference']:.2f}")
+        #     recommendations.append({
+        #         'type': 'info',
+        #         'message': f"Для трудовой функции '{comp['function_name']}' обнаружена значительная разница "
+        #                   f"между оценками сходства: TF-IDF ({comp['tfidf_score']:.2f}), "
+        #                   f"ruBERT ({comp['rubert_score']:.2f}). "
+        #                   f"Рекомендуется проверить соответствие формулировок."
+        #     })
+    
+    logger.debug(f"Сформировано рекомендаций: {len(recommendations)}")
+    return recommendations
+
+@app.route('/api/similarity-comparison')
+def get_similarity_comparison():
+    topic_id = request.args.get('topic_id')
+    if not topic_id:
+        return jsonify({'error': 'Не указан ID темы'}), 400
+        
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Получаем сходство для TF-IDF
+        cursor.execute('''
+            SELECT lf.id, lf.name, MAX(sr.tfidf_similarity) as score
+            FROM similarity_results sr
+            JOIN labor_functions lf ON lf.id = sr.labor_function_id
+            WHERE sr.topic_id = ?
+            GROUP BY lf.id, lf.name
+        ''', (topic_id,))
+        tfidf_similarities = []
+        for row in cursor.fetchall():
+            tfidf_similarities.append({
+                'function_id': row['id'],
+                'function_name': row['name'],
+                'score': row['score']
+            })
+            
+        # Получаем сходство для ruBERT
+        cursor.execute('''
+            SELECT lf.id, lf.name, MAX(sr.rubert_similarity) as score
+            FROM similarity_results sr
+            JOIN labor_functions lf ON lf.id = sr.labor_function_id
+            WHERE sr.topic_id = ?
+            GROUP BY lf.id, lf.name
+        ''', (topic_id,))
+        rubert_similarities = []
+        for row in cursor.fetchall():
+            rubert_similarities.append({
+                'function_id': row['id'],
+                'function_name': row['name'],
+                'score': row['score']
+            })
+        
+        # Формируем сравнение
+        comparison = []
+        for tfidf_sim in tfidf_similarities:
+            rubert_sim = next(
+                (s for s in rubert_similarities if s['function_id'] == tfidf_sim['function_id']),
+                None
+            )
+            
+            if rubert_sim:
+                comparison.append({
+                    'function_id': tfidf_sim['function_id'],
+                    'function_name': tfidf_sim['function_name'],
+                    'tfidf_score': tfidf_sim['score'],
+                    'rubert_score': rubert_sim['score'],
+                    'difference': abs(tfidf_sim['score'] - rubert_sim['score'])
+                })
+        
+        # Анализируем сравнение и формируем рекомендации
+        recommendations = analyze_similarity_comparison(comparison)
+        
+        conn.close()
+        return jsonify({
+            'comparison': comparison,
+            'recommendations': recommendations
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении сравнения сходства: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
