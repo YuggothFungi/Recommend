@@ -226,16 +226,42 @@ document.addEventListener('DOMContentLoaded', function() {
             const threshold = thresholdSlider.value / 100;
             const similarityType = similarityTypeSelect.value;
             const configurationId = configurationSelect.value;
-            log('Загрузка тем для функции:', { functionId, threshold, similarityType, configurationId });
+            const disciplineId = disciplineSelect.value;
+            
+            log('Загрузка тем для функции:', { functionId, threshold, similarityType, configurationId, disciplineId });
+            
+            // Сначала получаем все темы для функции
             const response = await fetch(`/api/similarities?labor_function_id=${functionId}&threshold=${threshold}&similarity_type=${similarityType}&configuration_id=${configurationId}`);
             log('Ответ от сервера:', response);
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
+            
             const data = await response.json();
             log('Полученные темы по функции:', data);
+            
             if (data.topics && Array.isArray(data.topics)) {
-                updateTopicsTable(data.topics, true);
+                // Если выбрана дисциплина, фильтруем темы
+                if (disciplineId) {
+                    // Получаем все темы для выбранной дисциплины
+                    const topicsResponse = await fetch(`/api/topics?discipline_id=${disciplineId}`);
+                    if (!topicsResponse.ok) {
+                        throw new Error(`HTTP error! status: ${topicsResponse.status}`);
+                    }
+                    const disciplineTopics = await topicsResponse.json();
+                    
+                    // Создаем множество ID тем дисциплины для быстрого поиска
+                    const disciplineTopicIds = new Set(disciplineTopics.map(t => t.id));
+                    
+                    // Фильтруем темы, оставляя только те, которые принадлежат выбранной дисциплине
+                    const filteredTopics = data.topics.filter(topic => disciplineTopicIds.has(topic.id));
+                    
+                    updateTopicsTable(filteredTopics, true);
+                } else {
+                    // Если дисциплина не выбрана, показываем все темы
+                    updateTopicsTable(data.topics, true);
+                }
             } else {
                 updateTopicsTable([]);
             }
@@ -311,16 +337,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Обработчики событий
+    // Обработчик изменения дисциплины
     function handleDisciplineChange() {
         const disciplineId = disciplineSelect.value;
+        log('Изменена дисциплина:', disciplineId);
+        
         if (disciplineId) {
-            loadTopics(disciplineId);
-            loadLaborFunctions();
+            // Если выбрана трудовая функция, обновляем список тем для этой функции
+            if (selectedFunctionId) {
+                loadTopicsByFunction(selectedFunctionId);
+            } else {
+                // Иначе загружаем все темы дисциплины
+                loadTopics(disciplineId);
+            }
         } else {
-            topicsTable.innerHTML = '';
-            functionsTable.innerHTML = '';
-            recommendationsDiv.innerHTML = '';
+            // Если дисциплина не выбрана, очищаем таблицу тем
+            updateTopicsTable([]);
         }
     }
 
