@@ -3,6 +3,79 @@
 ## Описание
 Прототип системы для автоматического выявления взаимосвязей между темами учебных дисциплин и требованиями профессиональных стандартов на основе семантического анализа текстовых данных.
 
+## Структура проекта
+
+Проект построен на основе модульной архитектуры с четким разделением ответственности между компонентами:
+
+```
+.
+├── src/                    # Исходный код
+│   ├── main.py            # Точка входа приложения
+│   ├── data_processor.py  # Обработка данных
+│   ├── data_loader.py     # Загрузка данных
+│   ├── schema.py         # Схема базы данных
+│   ├── text_processor.py  # Обработка текста
+│   ├── vectorizer.py     # Векторизация
+│   ├── tfidf_vectorizer.py # TF-IDF векторизатор
+│   ├── rubert_vectorizer.py # ruBERT векторизатор
+│   ├── vectorization_config.py # Конфигурация векторизации
+│   ├── vectorization_text_weights.py # Веса текстов
+│   └── utils/            # Вспомогательные модули
+├── frontend/             # Веб-интерфейс
+│   ├── app.py           # Веб-сервер
+│   ├── static/          # Статические файлы
+│   └── templates/       # HTML шаблоны
+├── database/            # База данных
+├── input/              # Входные данные
+└── tests/             # Тесты
+```
+
+### Основные компоненты
+
+1. **Обработка данных** (`data_processor.py`)
+   - Центральный модуль обработки данных
+   - Последовательное выполнение всех этапов
+   - Поддержка TF-IDF и ruBERT векторизации
+   - Расчет метрик сходства
+
+2. **Загрузка данных** (`data_loader.py`)
+   - Загрузка компетенций
+   - Загрузка трудовых функций
+   - Загрузка учебных планов
+   - Инициализация связей между данными
+
+3. **Обработка текста** (`text_processor.py`)
+   - Нормализация текстов
+   - Удаление стоп-слов
+   - Подготовка текстов к векторизации
+
+4. **Векторизация** (`vectorizer.py`, `tfidf_vectorizer.py`, `rubert_vectorizer.py`)
+   - TF-IDF векторизация
+   - ruBERT векторизация
+   - Расчет сходства между векторами
+
+5. **Конфигурация** (`vectorization_config.py`, `vectorization_text_weights.py`)
+   - Управление конфигурациями векторизации
+   - Настройка весов для различных компонентов
+   - Сохранение и загрузка конфигураций
+
+### База данных
+
+Основные таблицы:
+1. `disciplines` - дисциплины
+2. `semesters` - семестры
+3. `sections` - разделы
+4. `lecture_topics` - темы лекций
+5. `practical_topics` - темы практик
+6. `self_control_questions` - вопросы для самоконтроля
+7. `competencies` - компетенции
+8. `specialties` - специальности
+9. `labor_functions` - трудовые функции
+10. `vectorization_configurations` - конфигурации векторизации
+11. `vectorization_weights` - веса для векторизации
+12. `vectorization_results` - результаты векторизации
+13. `similarity_results` - результаты расчета сходства
+
 ## Установка
 
 1. Создайте виртуальное окружение:
@@ -30,7 +103,7 @@ pip install -r requirements.txt
 ### Веб-интерфейс
 Для запуска веб-сервера используйте команду:
 ```bash
-python main.py --web
+python src/main.py --web
 ```
 
 Дополнительные опции:
@@ -39,7 +112,7 @@ python main.py --web
 
 Пример:
 ```bash
-python main.py --web --port 8080 --host localhost
+python src/main.py --web --port 8080 --host localhost
 ```
 
 После запуска откройте браузер и перейдите по адресу:
@@ -52,28 +125,28 @@ http://localhost:5000
 
 1. Полный цикл обработки:
 ```bash
-python main.py --full-cycle
+python src/main.py --full-cycle
 ```
 
 2. Инициализация базы данных:
 ```bash
-python main.py --init-db
+python src/main.py --init-db
 ```
 
 3. Загрузка данных:
 ```bash
-python main.py --load-data
+python src/main.py --load-data
 ```
 
 4. Проверка данных:
 ```bash
-python main.py --check-data
+python src/main.py --check-data
 ```
 
 5. Векторизация:
 ```bash
-python main.py --vectorizer tfidf  # TF-IDF векторизация
-python main.py --vectorizer rubert # ruBERT векторизация
+python src/main.py --vectorizer tfidf --config-id 1  # TF-IDF векторизация
+python src/main.py --vectorizer rubert --config-id 2 # ruBERT векторизация
 ```
 
 ## Функциональность
@@ -83,7 +156,7 @@ python main.py --vectorizer rubert # ruBERT векторизация
 - Просмотр трудовых функций
 - Анализ сходства между темами и трудовыми функциями
 - Выбор метода векторизации (ruBERT или TF-IDF)
-- Настройка порога сходства
+- Настройка конфигурации векторизации
 - Получение рекомендаций по улучшению соответствия
 
 ## Работа с данными
@@ -96,30 +169,12 @@ python main.py --vectorizer rubert # ruBERT векторизация
 ### Векторизация
 - Тексты векторизуются с помощью TF-IDF и ruBERT
 - Векторы сохраняются в соответствующих таблицах
-- Для трудовых функций создаются записи в `labor_function_vectors`
+- Для трудовых функций создаются записи в `vectorization_results`
 
 ### Расчет сходства
 - Сходство рассчитывается между темами и трудовыми функциями
-- Результаты сохраняются в таблице `topic_labor_function`
-- Значения сходства обновляются при изменении порога
-
-## Структура проекта
-
-```
-.
-├── main.py                 # Точка входа приложения
-├── src/
-│   ├── data_processor.py   # Обработка данных
-│   ├── data_loader.py      # Загрузка данных
-│   ├── schema.py          # Схема базы данных
-│   ├── text_processor.py   # Обработка текста
-│   └── vectorizer.py      # Векторизация
-├── frontend/
-│   ├── app.py             # Веб-сервер
-│   ├── static/            # Статические файлы
-│   └── templates/         # HTML шаблоны
-└── database/              # База данных
-```
+- Результаты сохраняются в таблице `similarity_results`
+- Значения сходства обновляются при изменении конфигурации
 
 ## Документация
 - [OVERVIEW.md](OVERVIEW.md) — цели, задачи, структура, стек.
@@ -132,6 +187,7 @@ python main.py --vectorizer rubert # ruBERT векторизация
 - pymorphy2
 - nltk
 - Scikit-learn
-- Jupyter
+- transformers
+- torch
 - pandas
 - matplotlib
