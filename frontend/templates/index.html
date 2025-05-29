@@ -25,8 +25,8 @@
             <option value="">Выберите конфигурацию</option>
         </select>
 
-        <button id="show-keywords" class="button">Ключевые слова</button>
-        <button id="show-isolated" class="button">Изолированные элементы</button>
+        <button id="show-keywords" class="btn btn-primary">Ключевые слова</button>
+        <button id="show-isolated" class="btn btn-warning">Изолированные элементы</button>
     </div>
 
     <div class="main-content">
@@ -89,6 +89,25 @@
                 <div class="isolated-section">
                     <h3>Трудовые функции</h3>
                     <div id="isolated-functions"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для рекомендаций по часам -->
+    <div id="hours-recommendations-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Рекомендации по часам</h2>
+            </div>
+            <div class="modal-body">
+                <div class="recommendations-stats">
+                    <h3>Статистика по часам</h3>
+                    <div id="hours-statistics"></div>
+                </div>
+                <div class="recommendations-list">
+                    <h3>Рекомендации</h3>
+                    <div id="hours-recommendations-list"></div>
                 </div>
             </div>
         </div>

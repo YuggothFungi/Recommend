@@ -627,6 +627,84 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Обработчик для кнопки рекомендаций по часам
+    document.getElementById('show-hours-recommendations').addEventListener('click', async function() {
+        const configId = document.getElementById('configuration-id').value;
+        const threshold = document.getElementById('threshold').value;
+        const similarityType = document.getElementById('similarity-type').value;
+        const disciplineId = document.getElementById('discipline').value;
+
+        if (!configId) {
+            alert('Пожалуйста, выберите конфигурацию');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/hours-recommendations?configuration_id=${configId}&threshold=${threshold}&similarity_type=${similarityType}&discipline_id=${disciplineId}`);
+            const data = await response.json();
+
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            // Отображаем статистику
+            const statsHtml = `
+                <h3>Статистика по часам</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Среднее количество часов:</span>
+                    <span class="stat-value">${data.stats.avg_hours.toFixed(1)}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Максимальное количество часов:</span>
+                    <span class="stat-value">${data.stats.max_hours}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Минимальное количество часов:</span>
+                    <span class="stat-value">${data.stats.min_hours}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">75-й процентиль:</span>
+                    <span class="stat-value">${data.stats.percentile_75.toFixed(1)}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">25-й процентиль:</span>
+                    <span class="stat-value">${data.stats.percentile_25.toFixed(1)}</span>
+                </div>
+            `;
+            document.getElementById('hours-statistics').innerHTML = statsHtml;
+
+            // Отображаем рекомендации
+            const recommendationsHtml = data.recommendations.map(rec => `
+                <div class="recommendation-item ${rec.type === 'high_hours' ? 'high-hours' : 'low-hours'}">
+                    <div class="topic-info">
+                        <span class="topic-name">${rec.topic_name}</span>
+                        <span class="topic-hours">${rec.hours} часов</span>
+                    </div>
+                    <div class="topic-type">${rec.topic_type === 'lecture' ? 'Лекция' : 'Практика'}</div>
+                    <div class="recommendation-message">${rec.message}</div>
+                    <div class="similarity-info">
+                        Средняя схожесть: ${(rec.avg_similarity * 100).toFixed(1)}%
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('hours-recommendations-list').innerHTML = recommendationsHtml;
+
+            // Показываем модальное окно
+            document.getElementById('hours-recommendations-modal').style.display = 'block';
+        } catch (error) {
+            console.error('Ошибка при получении рекомендаций:', error);
+            alert('Произошла ошибка при получении рекомендаций');
+        }
+    });
+
+    // Закрытие модального окна рекомендаций
+    document.getElementById('hours-recommendations-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.style.display = 'none';
+        }
+    });
+
     // Инициализация
     log('Инициализация приложения...');
     loadConfigurations();

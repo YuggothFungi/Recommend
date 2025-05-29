@@ -500,5 +500,237 @@ def get_isolated_elements():
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/hours-recommendations')
+def get_hours_recommendations():
+    try:
+        config_id = request.args.get('configuration_id')
+        discipline_id = request.args.get('discipline_id')
+        similarity_type = request.args.get('similarity_type', 'rubert')
+        
+        if not config_id:
+            return jsonify({'error': 'Configuration ID is required'}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Определяем поле сходства
+        similarity_field = f"{similarity_type}_similarity"
+        
+        # Получаем статистику по часам для всех тем
+        stats_query = '''
+            WITH all_hours AS (
+                SELECT lt.hours as topic_hours 
+                FROM lecture_topics lt
+                JOIN sections s ON lt.section_id = s.id
+                JOIN similarity_results sr ON sr.topic_id = lt.id AND sr.topic_type = 'lecture'
+                WHERE lt.hours IS NOT NULL
+                AND sr.configuration_id = ?
+        '''
+        
+        stats_params = [config_id]
+        if discipline_id:
+            stats_query += ' AND s.discipline_id = ?'
+            stats_params.append(discipline_id)
+            
+        stats_query += '''
+                UNION ALL
+                SELECT pt.hours as topic_hours 
+                FROM practical_topics pt
+                JOIN sections s ON pt.section_id = s.id
+                JOIN similarity_results sr ON sr.topic_id = pt.id AND sr.topic_type = 'practical'
+                WHERE pt.hours IS NOT NULL
+                AND sr.configuration_id = ?
+        '''
+        
+        stats_params.append(config_id)
+        if discipline_id:
+            stats_query += ' AND s.discipline_id = ?'
+            stats_params.append(discipline_id)
+            
+        stats_query += '''
+            )
+            SELECT 
+                AVG(topic_hours) as avg_hours,
+                MAX(topic_hours) as max_hours,
+                MIN(topic_hours) as min_hours
+            FROM all_hours
+        '''
+        
+        cursor.execute(stats_query, stats_params)
+        stats = cursor.fetchone()
+        avg_hours = stats['avg_hours']
+        
+        # Получаем 75-й и 25-й процентили
+        percentiles_query = '''
+            WITH all_hours AS (
+                SELECT lt.hours as topic_hours 
+                FROM lecture_topics lt
+                JOIN sections s ON lt.section_id = s.id
+                JOIN similarity_results sr ON sr.topic_id = lt.id AND sr.topic_type = 'lecture'
+                WHERE lt.hours IS NOT NULL
+                AND sr.configuration_id = ?
+        '''
+        
+        percentiles_params = [config_id]
+        if discipline_id:
+            percentiles_query += ' AND s.discipline_id = ?'
+            percentiles_params.append(discipline_id)
+            
+        percentiles_query += '''
+                UNION ALL
+                SELECT pt.hours as topic_hours 
+                FROM practical_topics pt
+                JOIN sections s ON pt.section_id = s.id
+                JOIN similarity_results sr ON sr.topic_id = pt.id AND sr.topic_type = 'practical'
+                WHERE pt.hours IS NOT NULL
+                AND sr.configuration_id = ?
+        '''
+        
+        percentiles_params.append(config_id)
+        if discipline_id:
+            percentiles_query += ' AND s.discipline_id = ?'
+            percentiles_params.append(discipline_id)
+            
+        percentiles_query += '''
+            ),
+            ordered_hours AS (
+                SELECT topic_hours,
+                       ROW_NUMBER() OVER (ORDER BY topic_hours) as row_num,
+                       COUNT(*) OVER () as total_count
+                FROM all_hours
+            )
+            SELECT 
+                MAX(CASE WHEN row_num <= total_count * 0.75 THEN topic_hours END) as q3_hours,
+                MAX(CASE WHEN row_num <= total_count * 0.25 THEN topic_hours END) as q1_hours
+            FROM ordered_hours
+        '''
+        
+        cursor.execute(percentiles_query, percentiles_params)
+        percentiles = cursor.fetchone()
+        q3_hours = percentiles['q3_hours']  # 75-й процентиль
+        q1_hours = percentiles['q1_hours']  # 25-й процентиль
+        
+        # Получаем темы с рекомендациями
+        topics_query = f'''
+            WITH topic_stats AS (
+                SELECT 
+                    sr.topic_id,
+                    sr.topic_type,
+                    CASE 
+                        WHEN sr.topic_type = 'lecture' THEN lt.name
+                        ELSE pt.name
+                    END as topic_name,
+                    CASE 
+                        WHEN sr.topic_type = 'lecture' THEN lt.hours
+                        ELSE pt.hours
+                    END as topic_hours,
+                    MAX(sr.{similarity_field}) as max_similarity,
+                    COUNT(DISTINCT sr.labor_function_id) as functions_count
+                FROM similarity_results sr
+                LEFT JOIN lecture_topics lt ON sr.topic_type = 'lecture' AND sr.topic_id = lt.id
+                LEFT JOIN practical_topics pt ON sr.topic_type = 'practical' AND sr.topic_id = pt.id
+                LEFT JOIN sections s ON (sr.topic_type = 'lecture' AND lt.section_id = s.id) 
+                    OR (sr.topic_type = 'practical' AND pt.section_id = s.id)
+                WHERE sr.configuration_id = ?
+                AND sr.{similarity_field} IS NOT NULL
+        '''
+        
+        topics_params = [config_id]
+        
+        if discipline_id:
+            topics_query += ' AND s.discipline_id = ?'
+            topics_params.append(discipline_id)
+            
+        topics_query += '''
+                GROUP BY sr.topic_id, sr.topic_type, topic_name, topic_hours
+            )
+            SELECT 
+                topic_id,
+                topic_type,
+                topic_name,
+                topic_hours as hours,
+                max_similarity,
+                functions_count,
+                CASE
+                    WHEN topic_hours > ? AND max_similarity < 0.3 THEN 'high_hours_low_similarity'
+                    WHEN topic_hours < ? AND max_similarity > 0.7 THEN 'low_hours_high_similarity'
+                    WHEN topic_hours > ? AND functions_count = 0 THEN 'high_hours_no_functions'
+                    WHEN topic_hours < ? AND functions_count > 3 THEN 'low_hours_many_functions'
+                    ELSE NULL
+                END as recommendation_type
+            FROM topic_stats
+            WHERE recommendation_type IS NOT NULL
+            ORDER BY 
+                CASE recommendation_type
+                    WHEN 'high_hours_low_similarity' THEN 1
+                    WHEN 'high_hours_no_functions' THEN 2
+                    WHEN 'low_hours_high_similarity' THEN 3
+                    WHEN 'low_hours_many_functions' THEN 4
+                END,
+                topic_hours DESC
+        '''
+        
+        topics_params.extend([q3_hours, q1_hours, q3_hours, q1_hours])
+        
+        cursor.execute(topics_query, topics_params)
+        
+        recommendations = []
+        for row in cursor.fetchall():
+            recommendation = {
+                'topic_id': row['topic_id'],
+                'topic_type': row['topic_type'],
+                'topic_name': row['topic_name'],
+                'hours': row['hours'],
+                'max_similarity': row['max_similarity'],
+                'functions_count': row['functions_count'],
+                'type': row['recommendation_type']
+            }
+            
+            # Формируем текст рекомендации
+            if recommendation['type'] == 'high_hours_low_similarity':
+                recommendation['message'] = (
+                    f"Тема '{recommendation['topic_name']}' ({recommendation['hours']} часов) "
+                    f"имеет низкое сходство с трудовыми функциями (макс. {recommendation['max_similarity']:.2f}). "
+                    "Рекомендуется пересмотреть содержание темы для лучшего соответствия профстандартам."
+                )
+            elif recommendation['type'] == 'high_hours_no_functions':
+                recommendation['message'] = (
+                    f"Тема '{recommendation['topic_name']}' ({recommendation['hours']} часов) "
+                    "не имеет связей с трудовыми функциями. "
+                    "Рекомендуется проверить актуальность темы или добавить связи с профстандартами."
+                )
+            elif recommendation['type'] == 'low_hours_high_similarity':
+                recommendation['message'] = (
+                    f"Тема '{recommendation['topic_name']}' ({recommendation['hours']} часов) "
+                    f"имеет высокое сходство с трудовыми функциями (макс. {recommendation['max_similarity']:.2f}). "
+                    "Рекомендуется увеличить количество часов для лучшего освоения компетенций."
+                )
+            elif recommendation['type'] == 'low_hours_many_functions':
+                recommendation['message'] = (
+                    f"Тема '{recommendation['topic_name']}' ({recommendation['hours']} часов) "
+                    f"связана с {recommendation['functions_count']} трудовыми функциями. "
+                    "Рекомендуется увеличить количество часов для лучшего освоения всех связанных компетенций."
+                )
+            
+            recommendations.append(recommendation)
+            
+        conn.close()
+        
+        return jsonify({
+            'recommendations': recommendations,
+            'stats': {
+                'avg_hours': avg_hours,
+                'max_hours': stats['max_hours'],
+                'min_hours': stats['min_hours'],
+                'percentile_75': q3_hours,
+                'percentile_25': q1_hours
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении рекомендаций по часам: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True) 
