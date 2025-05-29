@@ -5,33 +5,63 @@ import numpy as np
 import json
 import os
 import sqlite3
-from db import get_db_connection
-from check_normalized_texts import check_normalized_texts
-from vectorization_config import VectorizationConfig
-from vectorization_text_weights import VectorizationTextWeights
+from src.db import get_db_connection
+from src.check_normalized_texts import check_normalized_texts
+from src.vectorization_config import VectorizationConfig
+from src.vectorization_text_weights import VectorizationTextWeights
 import pickle
 
 class RuBertVectorizer:
     """Векторизатор на основе ruBERT"""
     
-    def __init__(self, config_id: int, conn=None):
+    def __init__(self, config: VectorizationConfig, conn=None):
         """
         Инициализация векторизатора
         
         Args:
-            config_id: ID конфигурации векторизации
+            config: Конфигурация векторизации
             conn: Соединение с базой данных (опционально)
         """
         self.model_name = 'sberbank-ai/sbert_large_nlu_ru'
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.model = AutoModel.from_pretrained(self.model_name)
+        self.tokenizer = None
+        self.model = None
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
-        self.model.eval()
         self.vector_size = 1024  # Размер вектора для sbert_large_nlu_ru
         self.db_conn = conn  # Использовать переданное соединение
-        self.config = VectorizationConfig(config_id)
+        self.config = config
         self.text_weights = VectorizationTextWeights(self.config)
+    
+    def _ensure_model_loaded(self):
+        """Убедиться, что модель загружена"""
+        if self.model is None:
+            try:
+                print(f"\n=== Загрузка модели {self.model_name} ===")
+                print(f"Устройство: {self.device}")
+                print(f"Текущая директория: {os.getcwd()}")
+                
+                print("\nЗагрузка токенизатора...")
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                print("Токенизатор загружен")
+                
+                print("\nЗагрузка модели...")
+                self.model = AutoModel.from_pretrained(self.model_name)
+                print("Модель загружена")
+                
+                print("\nПеренос модели на устройство...")
+                self.model.to(self.device)
+                print("Модель перенесена на устройство")
+                
+                print("\nУстановка режима оценки...")
+                self.model.eval()
+                print("Режим оценки установлен")
+                
+                print("=== Модель успешно загружена ===\n")
+            except Exception as e:
+                print(f"\nОшибка при загрузке модели: {str(e)}")
+                print(f"Тип ошибки: {type(e)}")
+                import traceback
+                print(f"Трассировка:\n{traceback.format_exc()}")
+                raise
     
     def _mean_pooling(self, model_output, attention_mask):
         """Усреднение токенов для получения эмбеддинга предложения"""
@@ -69,6 +99,8 @@ class RuBertVectorizer:
         """Преобразование текстов в векторы"""
         if not texts:
             return np.array([])
+        
+        self._ensure_model_loaded()
         
         print("\n=== Начало векторизации ===")
         print(f"Количество текстов: {len(texts)}")

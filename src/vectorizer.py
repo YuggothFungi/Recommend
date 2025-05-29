@@ -58,9 +58,9 @@ class Vectorizer:
         self.vectorizer_type = vectorizer_type
         
         if vectorizer_type == 'tfidf':
-            self.vectorizer = TfidfDatabaseVectorizer(config_id)
+            self.vectorizer = TfidfDatabaseVectorizer(self.config)
         elif vectorizer_type == 'rubert':
-            self.vectorizer = RuBertVectorizer(config_id)
+            self.vectorizer = RuBertVectorizer(self.config)
         else:
             raise ValueError(f"Неизвестный тип векторизатора: {vectorizer_type}")
             

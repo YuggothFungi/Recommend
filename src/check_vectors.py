@@ -170,9 +170,52 @@ def check_vectors(config_id=None):
     
     conn.close()
 
+def compare_vectors():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Получаем вектора для конфигураций 1 и 3
+    cursor.execute("""
+        SELECT vr1.entity_type, vr1.entity_id, vr1.vector_type, 
+               vr1.vector_data, vr3.vector_data
+        FROM vectorization_results vr1
+        JOIN vectorization_results vr3 
+        ON vr1.entity_type = vr3.entity_type 
+        AND vr1.entity_id = vr3.entity_id 
+        AND vr1.vector_type = vr3.vector_type
+        WHERE vr1.configuration_id = 1 
+        AND vr3.configuration_id = 3
+        LIMIT 5
+    """)
+    
+    results = cursor.fetchall()
+    
+    print("Сравнение векторов конфигураций 1 и 3:")
+    print("-" * 50)
+    
+    for row in results:
+        entity_type, entity_id, vector_type, vec1_data, vec3_data = row
+        
+        # Преобразуем бинарные данные в numpy массивы
+        vec1 = np.frombuffer(vec1_data, dtype=np.float32)
+        vec3 = np.frombuffer(vec3_data, dtype=np.float32)
+        
+        # Вычисляем косинусное сходство между векторами
+        similarity = np.dot(vec1, vec3) / (np.linalg.norm(vec1) * np.linalg.norm(vec3))
+        
+        print(f"Тип: {entity_type}, ID: {entity_id}, Тип вектора: {vector_type}")
+        print(f"Косинусное сходство: {similarity:.6f}")
+        print(f"Норма вектора 1: {np.linalg.norm(vec1):.6f}")
+        print(f"Норма вектора 3: {np.linalg.norm(vec3):.6f}")
+        print(f"Максимальное различие: {np.max(np.abs(vec1 - vec3)):.6f}")
+        print("-" * 50)
+    
+    conn.close()
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         config_id = int(sys.argv[1])
         check_vectors(config_id)
     else:
-        check_vectors() 
+        check_vectors()
+    compare_vectors() 

@@ -5,9 +5,12 @@ import sqlite3
 import tempfile
 from src.db import get_db_connection
 from src.schema import init_db
+from pathlib import Path
 
-# Добавляем путь к директории src в PYTHONPATH
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Добавляем корневую директорию проекта в PYTHONPATH
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
 @pytest.fixture(scope="function")
 def db_connection():

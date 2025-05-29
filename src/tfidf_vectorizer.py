@@ -3,7 +3,10 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer as SklearnTfidfVectorizer
 import pickle
 import os
-from vectorization_config import VectorizationConfig
+from scipy import sparse
+from src.vectorization_config import VectorizationConfig
+from src.vectorization_text_weights import VectorizationTextWeights
+from src.db import get_db_connection
 
 class TfidfDatabaseVectorizer:
     """
@@ -22,6 +25,14 @@ class TfidfDatabaseVectorizer:
     Этот класс отвечает только за преобразование нормализованных текстов в TF-IDF векторы.
     """
     
+    # Общий векторизатор для всех экземпляров
+    _shared_vectorizer = SklearnTfidfVectorizer(
+        max_features=5000,  # Уменьшаем размерность для ускорения
+        min_df=1,          # Учитываем все термины
+        max_df=1.0,        # Учитываем все термины
+        ngram_range=(1, 2) # Учитываем биграммы для лучшего улавливания контекста
+    )
+    
     def __init__(self, config: VectorizationConfig):
         """
         Инициализация TF-IDF векторизатора
@@ -30,24 +41,41 @@ class TfidfDatabaseVectorizer:
             config: Конфигурация векторизации
         """
         self.config = config
-        self.vectorizer = SklearnTfidfVectorizer(
-            max_features=5000,  # Уменьшаем размерность для ускорения
-            min_df=3,          # Игнорируем редкие термины
-            max_df=0.85,       # Игнорируем слишком частые термины
-            ngram_range=(1, 2) # Учитываем биграммы для лучшего улавливания контекста
-        )
+        self.vectorizer = self._shared_vectorizer
+        self.is_fitted = False
     
-    def fit_transform(self, texts: List[str]) -> np.ndarray:
+    def _apply_weights(self, vectors: np.ndarray, weights: List[List[Any]]) -> np.ndarray:
         """
-        Обучение и преобразование нормализованных текстов в векторы
+        Применение весов к векторам
         
         Args:
-            texts: Список нормализованных текстов
+            vectors: Массив векторов
+            weights: Список списков весов (каждый внутренний список содержит объекты VectorizationWeight)
             
         Returns:
-            Массив TF-IDF векторов
+            Массив взвешенных векторов
         """
-        return self.vectorizer.fit_transform(texts)
+        # Преобразуем веса в массив numpy, учитывая только числовые веса
+        weight_array = np.array([sum(w.weight for w in weight_list) for weight_list in weights]).reshape(-1, 1)
+        
+        # Применяем веса к векторам
+        weighted_vectors = vectors * weight_array
+        
+        # Нормализуем векторы
+        norms = np.linalg.norm(weighted_vectors, axis=1, keepdims=True)
+        weighted_vectors = weighted_vectors / norms
+        
+        return weighted_vectors
+    
+    def fit(self, texts: List[str]) -> None:
+        """
+        Обучение векторизатора на всех текстах
+        
+        Args:
+            texts: Список всех текстов для обучения
+        """
+        self.vectorizer.fit(texts)
+        self.is_fitted = True
     
     def transform(self, texts: List[str]) -> np.ndarray:
         """
@@ -59,12 +87,37 @@ class TfidfDatabaseVectorizer:
         Returns:
             Массив TF-IDF векторов (нормализованных)
         """
-        vectors = self.vectorizer.transform(texts)
-        # Нормализуем векторы
-        vectors = vectors.toarray()  # Преобразуем в плотный массив
-        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-        vectors = vectors / norms
-        return vectors
+        if not self.is_fitted:
+            raise ValueError("Векторизатор не обучен. Сначала вызовите метод fit()")
+        
+        # Получаем базовые векторы
+        vectors = self.vectorizer.transform(texts).toarray()
+        
+        # Получаем веса для каждого типа сущности
+        weights = []
+        for text in texts:
+            if 'lecture_topic' in text:
+                weights.append(self.config.get_entity_weights('lecture_topic'))
+            elif 'practical_topic' in text:
+                weights.append(self.config.get_entity_weights('practical_topic'))
+            else:
+                weights.append(self.config.get_entity_weights('labor_function'))
+        
+        # Применяем веса к векторам
+        return self._apply_weights(vectors, weights)
+    
+    def fit_transform(self, texts: List[str]) -> np.ndarray:
+        """
+        Обучение и преобразование нормализованных текстов в векторы
+        
+        Args:
+            texts: Список нормализованных текстов
+            
+        Returns:
+            Массив TF-IDF векторов
+        """
+        self.fit(texts)
+        return self.transform(texts)
     
     def save_meta(self, meta_file: str) -> None:
         """

@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Optional, Tuple
 import sqlite3
-from db import get_db_connection
-from vectorization_config import VectorizationConfig, VectorizationWeight
+from src.db import get_db_connection
+from src.vectorization_config import VectorizationConfig, VectorizationWeight
 
 class VectorizationTextWeights:
     """Класс для подготовки текста с учетом весов при векторизации"""
@@ -72,26 +72,32 @@ class VectorizationTextWeights:
         for weight in weights:
             if weight.source_type == 'name':
                 text = topic_norm_name if weight.use_normalized else topic_name
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
                 hours_weight = weight.hours_weight
             elif weight.source_type == 'section_name':
                 text = section_norm_name if weight.use_normalized else section_name
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
             elif weight.source_type == 'section_content':
                 text = section_norm_content if weight.use_normalized else section_content
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
             elif weight.source_type == 'self_control_questions':
                 questions_text = ' '.join(
                     q[1] if weight.use_normalized else q[0]
                     for q in questions
                 )
-                text_parts.append(questions_text * int(weight.weight))
+                if questions_text:  # Добавляем только если текст не пустой
+                    text_parts.append(questions_text)
             elif weight.source_type == 'discipline_goals':
                 text = discipline_norm_goals if weight.use_normalized else discipline_goals
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
             elif weight.source_type == 'discipline_tasks':
                 text = discipline_norm_tasks if weight.use_normalized else discipline_tasks
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
         
         if should_close:
             conn.close()
@@ -155,26 +161,32 @@ class VectorizationTextWeights:
         for weight in weights:
             if weight.source_type == 'name':
                 text = topic_norm_name if weight.use_normalized else topic_name
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
                 hours_weight = weight.hours_weight
             elif weight.source_type == 'section_name':
                 text = section_norm_name if weight.use_normalized else section_name
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
             elif weight.source_type == 'section_content':
                 text = section_norm_content if weight.use_normalized else section_content
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
             elif weight.source_type == 'self_control_questions':
                 questions_text = ' '.join(
                     q[1] if weight.use_normalized else q[0]
                     for q in questions
                 )
-                text_parts.append(questions_text * int(weight.weight))
+                if questions_text:  # Добавляем только если текст не пустой
+                    text_parts.append(questions_text)
             elif weight.source_type == 'discipline_goals':
                 text = discipline_norm_goals if weight.use_normalized else discipline_goals
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
             elif weight.source_type == 'discipline_tasks':
                 text = discipline_norm_tasks if weight.use_normalized else discipline_tasks
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
         
         if should_close:
             conn.close()
@@ -229,13 +241,15 @@ class VectorizationTextWeights:
         for weight in weights:
             if weight.source_type == 'name':
                 text = function_norm_name if weight.use_normalized else function_name
-                text_parts.append(text * int(weight.weight))
+                if text:  # Добавляем только если текст не пустой
+                    text_parts.append(text)
             elif weight.source_type == 'labor_components':
                 components_text = ' '.join(
                     c[1] if weight.use_normalized else c[0]
                     for c in components
                 )
-                text_parts.append(components_text * int(weight.weight))
+                if components_text:  # Добавляем только если текст не пустой
+                    text_parts.append(components_text)
         
         if should_close:
             conn.close()

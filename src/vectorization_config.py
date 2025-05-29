@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Optional
-from db import get_db_connection
+from src.db import get_db_connection
 
 @dataclass
 class VectorizationWeight:

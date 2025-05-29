@@ -4,24 +4,30 @@
 Проверяет зависимости и запускает основную логику
 """
 
+import os
 import sys
+from pathlib import Path
+
+# Добавляем корневую директорию проекта в PYTHONPATH
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 import pkg_resources
 import subprocess
-from pathlib import Path
 import argparse
-from text_processor import DatabaseTextProcessor
-from vectorizer import Vectorizer
-from data_loader import load_all_data, load_competencies, load_labor_functions, load_curriculum
-from check_data import check_data
-from check_vectors import check_vectors
-from check_similarities import check_similarities
-from check_normalized_texts import check_normalized_texts
-from download_nltk_data import setup_nltk
-from data_processor import process_data
-from schema import init_db, reset_db
-from vectorization_config import VectorizationConfig
-from check_db import check_database
-import os
+from src.text_processor import DatabaseTextProcessor
+from src.vectorizer import Vectorizer
+from src.data_loader import load_all_data, load_competencies, load_labor_functions, load_curriculum
+from src.check_data import check_data
+from src.check_vectors import check_vectors
+from src.check_similarities import check_similarities
+from src.check_normalized_texts import check_normalized_texts
+from src.download_nltk_data import setup_nltk
+from src.data_processor import process_data
+from src.schema import init_db, reset_db
+from src.vectorization_config import VectorizationConfig
+from src.check_db import check_database
 import logging
 
 # Настройка логирования
@@ -217,7 +223,7 @@ def main():
             logger.info(f"Векторизация с использованием {args.vectorizer}...")
             if not args.config_id:
                 raise ValueError("Для векторизации необходимо указать ID конфигурации (--config-id)")
-            vectorizer = Vectorizer(vectorizer_type=args.vectorizer, config_id=args.config_id)
+            vectorizer = Vectorizer(config_id=args.config_id, vectorizer_type=args.vectorizer)
             vectorizer.vectorize_all()
             logger.info("Векторизация завершена")
         

@@ -3,8 +3,10 @@ import sqlite3
 import pickle
 import logging
 from typing import List, Tuple
-from vector_utils import normalize_vector
-from db import get_db_connection
+from src.vector_utils import normalize_vector
+from src.db import get_db_connection
+from src.vectorization_config import VectorizationConfig
+from src.vectorization_text_weights import VectorizationTextWeights
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,8 @@ class VectorStorage:
     
     def __init__(self, config_id: int):
         self.config_id = config_id
+        self.config = VectorizationConfig(config_id)
+        self.text_weights = VectorizationTextWeights(self.config)
     
     def save_vector(self, cursor: sqlite3.Cursor, entity_id: int, 
                    entity_type: str, vector_type: str, vector) -> None:
@@ -48,7 +52,7 @@ class VectorStorage:
     
     def get_all_texts(self, cursor: sqlite3.Cursor) -> List[Tuple[str, str, int]]:
         """
-        Получение всех текстов из базы данных
+        Получение всех текстов из базы данных с учетом конфигурации векторизации
         
         Args:
             cursor: Курсор базы данных
@@ -59,30 +63,21 @@ class VectorStorage:
         texts = []
         
         # Получаем тексты лекций
-        cursor.execute("""
-            SELECT id, name, nltk_normalized_name 
-            FROM lecture_topics
-        """)
-        for lecture_id, name, normalized_name in cursor.fetchall():
-            text = normalized_name if normalized_name else name
+        cursor.execute("SELECT id FROM lecture_topics")
+        for (lecture_id,) in cursor.fetchall():
+            text, _ = self.text_weights.get_lecture_topic_text(lecture_id, cursor.connection)
             texts.append((text, 'lecture_topic', lecture_id))
         
         # Получаем тексты практик
-        cursor.execute("""
-            SELECT id, name, nltk_normalized_name 
-            FROM practical_topics
-        """)
-        for practical_id, name, normalized_name in cursor.fetchall():
-            text = normalized_name if normalized_name else name
+        cursor.execute("SELECT id FROM practical_topics")
+        for (practical_id,) in cursor.fetchall():
+            text, _ = self.text_weights.get_practical_topic_text(practical_id, cursor.connection)
             texts.append((text, 'practical_topic', practical_id))
         
         # Получаем тексты трудовых функций
-        cursor.execute("""
-            SELECT id, name, nltk_normalized_name 
-            FROM labor_functions
-        """)
-        for function_id, name, normalized_name in cursor.fetchall():
-            text = normalized_name if normalized_name else name
+        cursor.execute("SELECT id FROM labor_functions")
+        for (function_id,) in cursor.fetchall():
+            text = self.text_weights.get_labor_function_text(function_id, cursor.connection)
             texts.append((text, 'labor_function', function_id))
         
         return texts 
