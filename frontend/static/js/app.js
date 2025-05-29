@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Загрузка дисциплин при старте
     loadDisciplines();
+    loadConfigurations();
 
     // Обработчики событий
     disciplineSelect.addEventListener('change', handleDisciplineChange);
