@@ -26,6 +26,7 @@
         </select>
 
         <button id="show-keywords" class="button">Ключевые слова</button>
+        <button id="show-isolated" class="button">Изолированные элементы</button>
     </div>
 
     <div class="main-content">
@@ -70,6 +71,25 @@
             </div>
             <div class="modal-body">
                 <div id="keywords-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для изолированных элементов -->
+    <div id="isolated-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Изолированные элементы</h2>
+            </div>
+            <div class="modal-body">
+                <div class="isolated-section">
+                    <h3>Темы</h3>
+                    <div id="isolated-topics"></div>
+                </div>
+                <div class="isolated-section">
+                    <h3>Трудовые функции</h3>
+                    <div id="isolated-functions"></div>
+                </div>
             </div>
         </div>
     </div>

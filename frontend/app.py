@@ -389,5 +389,116 @@ def get_keywords():
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/isolated-elements')
+def get_isolated_elements():
+    try:
+        threshold = float(request.args.get('threshold', 0.3))
+        similarity_type = request.args.get('similarity_type', 'rubert')
+        config_id = request.args.get('configuration_id')
+        discipline_id = request.args.get('discipline_id')
+        
+        if not config_id:
+            return jsonify({'error': 'Configuration ID is required'}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Определяем поле сходства в зависимости от типа
+        similarity_field = f"{similarity_type}_similarity"
+        
+        # Получаем изолированные темы
+        topics_query = f'''
+            SELECT 
+                sr.topic_id,
+                sr.topic_type,
+                CASE 
+                    WHEN sr.topic_type = 'lecture' THEN lt.name
+                    ELSE pt.name
+                END as name,
+                MAX(sr.{similarity_field}) as max_similarity
+            FROM similarity_results sr
+            LEFT JOIN lecture_topics lt ON sr.topic_type = 'lecture' AND sr.topic_id = lt.id
+            LEFT JOIN practical_topics pt ON sr.topic_type = 'practical' AND sr.topic_id = pt.id
+            LEFT JOIN sections s ON (sr.topic_type = 'lecture' AND lt.section_id = s.id) 
+                OR (sr.topic_type = 'practical' AND pt.section_id = s.id)
+            WHERE sr.configuration_id = ?
+        '''
+        
+        topics_params = [config_id]
+        
+        if discipline_id:
+            topics_query += ' AND s.discipline_id = ?'
+            topics_params.append(discipline_id)
+            
+        topics_query += '''
+            GROUP BY sr.topic_id, sr.topic_type
+            HAVING max_similarity < ? OR max_similarity IS NULL
+            ORDER BY max_similarity ASC
+        '''
+        topics_params.append(threshold)
+        
+        cursor.execute(topics_query, topics_params)
+        
+        isolated_topics = []
+        for row in cursor.fetchall():
+            isolated_topics.append({
+                'id': row['topic_id'],
+                'name': row['name'],
+                'type': row['topic_type'],
+                'max_similarity': row['max_similarity']
+            })
+            
+        # Получаем изолированные трудовые функции
+        functions_query = '''
+            SELECT 
+                lf.id,
+                lf.name,
+                MAX(sr.{similarity_field}) as max_similarity
+            FROM labor_functions lf
+            LEFT JOIN similarity_results sr ON lf.id = sr.labor_function_id 
+                AND sr.configuration_id = ?
+        '''
+        
+        functions_params = [config_id]
+        
+        if discipline_id:
+            functions_query += '''
+                LEFT JOIN lecture_topics lt ON sr.topic_type = 'lecture' AND sr.topic_id = lt.id
+                LEFT JOIN practical_topics pt ON sr.topic_type = 'practical' AND sr.topic_id = pt.id
+                LEFT JOIN sections s ON (sr.topic_type = 'lecture' AND lt.section_id = s.id) 
+                    OR (sr.topic_type = 'practical' AND pt.section_id = s.id)
+                WHERE s.discipline_id = ?
+            '''
+            functions_params.append(discipline_id)
+            
+        functions_query += '''
+            GROUP BY lf.id, lf.name
+            HAVING max_similarity < ? OR max_similarity IS NULL
+            ORDER BY max_similarity ASC
+        '''
+        functions_params.append(threshold)
+        
+        cursor.execute(functions_query.format(similarity_field=similarity_field), functions_params)
+        
+        isolated_functions = []
+        for row in cursor.fetchall():
+            isolated_functions.append({
+                'id': row['id'],
+                'name': row['name'],
+                'max_similarity': row['max_similarity']
+            })
+            
+        conn.close()
+        
+        return jsonify({
+            'topics': isolated_topics,
+            'functions': isolated_functions
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении изолированных элементов: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True) 

@@ -554,6 +554,79 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Обработчик клика по кнопке "Изолированные элементы"
+    document.getElementById('show-isolated').addEventListener('click', async function() {
+        const configId = document.getElementById('configuration-id').value;
+        if (!configId) {
+            alert('Пожалуйста, выберите конфигурацию');
+            return;
+        }
+        
+        const threshold = document.getElementById('threshold').value / 100;
+        const similarityType = document.getElementById('similarity-type').value;
+        const disciplineId = document.getElementById('discipline').value;
+        
+        try {
+            const params = new URLSearchParams({
+                configuration_id: configId,
+                threshold: threshold,
+                similarity_type: similarityType
+            });
+            
+            if (disciplineId) {
+                params.append('discipline_id', disciplineId);
+            }
+            
+            const response = await fetch(`/api/isolated-elements?${params.toString()}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            
+            // Отображаем изолированные темы
+            const topicsContainer = document.getElementById('isolated-topics');
+            if (data.topics.length === 0) {
+                topicsContainer.innerHTML = '<div class="no-items">Нет изолированных тем</div>';
+            } else {
+                topicsContainer.innerHTML = data.topics.map(topic => `
+                    <div class="isolated-item">
+                        <span class="item-name">${topic.name}</span>
+                        <span class="item-type">${topic.type === 'lecture' ? 'Лекция' : 'Практика'}</span>
+                        <span class="item-similarity">${topic.max_similarity ? topic.max_similarity.toFixed(2) : 'Нет данных'}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // Отображаем изолированные функции
+            const functionsContainer = document.getElementById('isolated-functions');
+            if (data.functions.length === 0) {
+                functionsContainer.innerHTML = '<div class="no-items">Нет изолированных функций</div>';
+            } else {
+                functionsContainer.innerHTML = data.functions.map(func => `
+                    <div class="isolated-item">
+                        <span class="item-name">${func.name}</span>
+                        <span class="item-similarity">${func.max_similarity ? func.max_similarity.toFixed(2) : 'Нет данных'}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // Показываем модальное окно
+            document.getElementById('isolated-modal').style.display = 'block';
+        } catch (error) {
+            console.error('Ошибка при загрузке изолированных элементов:', error);
+            alert('Ошибка при загрузке изолированных элементов');
+        }
+    });
+
+    // Закрытие модального окна изолированных элементов при клике вне его области
+    document.getElementById('isolated-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.style.display = 'none';
+        }
+    });
+
     // Инициализация
     log('Инициализация приложения...');
     loadConfigurations();

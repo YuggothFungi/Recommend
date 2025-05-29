@@ -242,4 +242,50 @@ tr:hover {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Стили для секций изолированных элементов */
+.isolated-section {
+    margin-bottom: 20px;
+}
+
+.isolated-section h3 {
+    color: #333;
+    font-size: 1.2em;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.isolated-item {
+    background-color: #f8f9fa;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.isolated-item .item-name {
+    flex-grow: 1;
+}
+
+.isolated-item .item-type {
+    color: #666;
+    font-size: 0.9em;
+    margin-left: 10px;
+}
+
+.isolated-item .item-similarity {
+    color: #dc3545;
+    font-weight: bold;
+    margin-left: 10px;
+}
+
+.no-items {
+    color: #666;
+    font-style: italic;
+    padding: 10px;
+    text-align: center;
 } 
