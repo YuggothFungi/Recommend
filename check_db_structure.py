@@ -21,5 +21,5 @@ def check_db_structure():
     
     conn.close()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     check_db_structure() 

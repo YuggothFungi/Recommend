@@ -243,6 +243,21 @@ def init_db():
         )
     """)
     
+    # Таблица ключевых слов
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS keywords (
+            id INTEGER PRIMARY KEY,
+            configuration_id INTEGER NOT NULL,
+            entity_type TEXT NOT NULL CHECK (entity_type IN ('lecture_topic', 'practical_topic', 'labor_function')),
+            entity_id INTEGER NOT NULL,
+            keyword TEXT NOT NULL,
+            weight REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (configuration_id) REFERENCES vectorization_configurations(id) ON DELETE CASCADE,
+            UNIQUE (configuration_id, entity_type, entity_id, keyword)
+        )
+    """)
+    
     # Индексы для оптимизации запросов
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_vectorization_weights_config 
@@ -283,6 +298,22 @@ def init_db():
     cursor.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_similarity_results_unique 
         ON similarity_results(configuration_id, topic_id, topic_type, labor_function_id)
+    """)
+    
+    # Индексы для таблицы ключевых слов
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_keywords_config 
+        ON keywords(configuration_id)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_keywords_entity 
+        ON keywords(entity_type, entity_id)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_keywords_keyword 
+        ON keywords(keyword)
     """)
     
     # Предопределенные конфигурации

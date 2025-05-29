@@ -24,6 +24,8 @@
         <select id="configuration-id">
             <option value="">Выберите конфигурацию</option>
         </select>
+
+        <button id="show-keywords" class="button">Ключевые слова</button>
     </div>
 
     <div class="main-content">
@@ -59,6 +61,18 @@
     </div>
 
     <div id="recommendations"></div>
+
+    <!-- Модальное окно для ключевых слов -->
+    <div id="keywords-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="keywords-title">Ключевые слова</h2>
+            </div>
+            <div class="modal-body">
+                <div id="keywords-list"></div>
+            </div>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

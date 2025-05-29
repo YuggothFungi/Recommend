@@ -86,10 +86,17 @@ class Vectorizer:
         logger.info("\nВекторизация текстов...")
         vectors = self.vectorizer.fit_transform(all_texts)
         
-        # Сохраняем векторы
+        # Сохраняем векторы и ключевые слова
         for (text, entity_type, entity_id), vector in zip(texts_data, vectors):
+            # Сохраняем вектор
             self.storage.save_vector(cursor, entity_id, entity_type, 
                                    self.vectorizer_type, vector)
+            
+            # Извлекаем и сохраняем ключевые слова
+            if self.vectorizer_type == 'tfidf':
+                keywords = self.vectorizer.extract_keywords(text)
+                self.storage.save_keywords(cursor, entity_id, entity_type,
+                                        self.config.config_id, keywords)
         
         conn.commit()
         

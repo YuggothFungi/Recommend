@@ -14,6 +14,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedTopicId = null;
     let selectedFunctionId = null;
 
+    // Глобальные переменные для хранения выбранной строки
+    let selectedRow = null;
+    let selectedType = null; // 'topic' или 'function'
+
     // Загрузка дисциплин при старте
     loadDisciplines();
 
@@ -448,6 +452,107 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedTopicId = null;
         loadSimilarities(functionId);
     }
+
+    // Обработчик клика по строке в таблице тем
+    document.querySelector('#topics-table tbody').addEventListener('click', function(e) {
+        const row = e.target.closest('tr');
+        if (!row) return;
+        
+        // Убираем выделение с предыдущей выбранной строки
+        if (selectedRow) {
+            selectedRow.classList.remove('selected');
+        }
+        
+        // Выделяем новую строку
+        row.classList.add('selected');
+        selectedRow = row;
+        selectedType = 'topic';
+        
+        // Сохраняем ID темы
+        selectedTopicId = row.dataset.id;
+    });
+
+    // Обработчик клика по строке в таблице функций
+    document.querySelector('#functions-table tbody').addEventListener('click', function(e) {
+        const row = e.target.closest('tr');
+        if (!row) return;
+        
+        // Убираем выделение с предыдущей выбранной строки
+        if (selectedRow) {
+            selectedRow.classList.remove('selected');
+        }
+        
+        // Выделяем новую строку
+        row.classList.add('selected');
+        selectedRow = row;
+        selectedType = 'function';
+        
+        // Сохраняем ID функции
+        selectedFunctionId = row.dataset.id;
+    });
+
+    // Обработчик клика по кнопке "Ключевые слова"
+    document.getElementById('show-keywords').addEventListener('click', async function() {
+        if (!selectedRow) {
+            alert('Пожалуйста, выберите тему или функцию');
+            return;
+        }
+        
+        const configId = document.getElementById('configuration-id').value;
+        if (!configId) {
+            alert('Пожалуйста, выберите конфигурацию');
+            return;
+        }
+        
+        // Получаем ID выбранной сущности
+        const entityId = selectedType === 'topic' ? selectedTopicId : selectedFunctionId;
+        
+        // Определяем тип сущности
+        let entityType;
+        if (selectedType === 'topic') {
+            // Получаем тип темы из строки таблицы
+            const typeCell = selectedRow.cells[0];
+            entityType = typeCell.textContent.trim() === 'Л' ? 'lecture_topic' : 'practical_topic';
+        } else {
+            entityType = 'labor_function';
+        }
+        
+        try {
+            const response = await fetch(`/api/keywords?entity_id=${entityId}&entity_type=${entityType}&config_id=${configId}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            
+            // Обновляем заголовок модального окна
+            const title = selectedType === 'topic' ? 'Ключевые слова темы' : 'Ключевые слова функции';
+            document.getElementById('keywords-title').textContent = `${title}: ${data.name}`;
+            
+            // Отображаем ключевые слова
+            const keywordsList = document.getElementById('keywords-list');
+            keywordsList.innerHTML = data.keywords.map(kw => `
+                <div class="keyword-item">
+                    ${kw.keyword}
+                    <span class="keyword-weight">(${kw.weight.toFixed(2)})</span>
+                </div>
+            `).join('');
+            
+            // Показываем модальное окно
+            document.getElementById('keywords-modal').style.display = 'block';
+        } catch (error) {
+            console.error('Ошибка при загрузке ключевых слов:', error);
+            alert('Ошибка при загрузке ключевых слов');
+        }
+    });
+
+    // Закрытие модального окна при клике вне его области
+    document.getElementById('keywords-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.style.display = 'none';
+        }
+    });
 
     // Инициализация
     log('Инициализация приложения...');

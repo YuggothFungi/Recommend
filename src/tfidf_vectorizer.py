@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer as SklearnTfidfVectorizer
 import pickle
@@ -138,4 +138,33 @@ class TfidfDatabaseVectorizer:
             meta_file: Путь к файлу с сохраненным векторизатором
         """
         with open(meta_file, 'rb') as f:
-            self.vectorizer = pickle.load(f) 
+            self.vectorizer = pickle.load(f)
+
+    def extract_keywords(self, text: str, top_n: int = 5) -> List[Tuple[str, float]]:
+        """
+        Извлечение ключевых слов из текста
+        
+        Args:
+            text: Текст для анализа
+            top_n: Количество ключевых слов
+            
+        Returns:
+            Список кортежей (слово, вес)
+        """
+        if not self.is_fitted:
+            raise ValueError("Векторизатор не обучен. Сначала вызовите метод fit()")
+            
+        # Получаем вектор для текста
+        vector = self.vectorizer.transform([text])
+        
+        # Получаем все термины
+        feature_names = self.vectorizer.get_feature_names_out()
+        
+        # Получаем веса для каждого термина
+        weights = vector.toarray()[0]
+        
+        # Сортируем термины по весу
+        sorted_indices = weights.argsort()[::-1]
+        
+        # Возвращаем top_n ключевых слов с их весами
+        return [(feature_names[i], weights[i]) for i in sorted_indices[:top_n]] 

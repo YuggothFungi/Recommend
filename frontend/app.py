@@ -340,5 +340,54 @@ def get_similarity_comparison():
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/keywords')
+def get_keywords():
+    try:
+        entity_id = request.args.get('entity_id')
+        entity_type = request.args.get('entity_type')
+        config_id = request.args.get('config_id')
+        
+        if not all([entity_id, entity_type, config_id]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Получаем название сущности в зависимости от типа
+        if entity_type == 'lecture_topic':
+            cursor.execute('SELECT name FROM lecture_topics WHERE id = ?', (entity_id,))
+        elif entity_type == 'practical_topic':
+            cursor.execute('SELECT name FROM practical_topics WHERE id = ?', (entity_id,))
+        else:  # labor_function
+            cursor.execute('SELECT name FROM labor_functions WHERE id = ?', (entity_id,))
+            
+        entity = cursor.fetchone()
+        if not entity:
+            return jsonify({'error': 'Entity not found'}), 404
+            
+        # Получаем ключевые слова
+        cursor.execute('''
+            SELECT keyword, weight
+            FROM keywords
+            WHERE entity_id = ? 
+              AND entity_type = ?
+              AND configuration_id = ?
+            ORDER BY weight DESC
+            LIMIT 5
+        ''', (entity_id, entity_type, config_id))
+        
+        keywords = [{'keyword': row['keyword'], 'weight': row['weight']} 
+                   for row in cursor.fetchall()]
+        
+        conn.close()
+        return jsonify({
+            'name': entity['name'],
+            'keywords': keywords
+        })
+    except Exception as e:
+        logger.error(f"Ошибка при получении ключевых слов: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True) 

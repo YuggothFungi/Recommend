@@ -81,3 +81,54 @@ class VectorStorage:
             texts.append((text, 'labor_function', function_id))
         
         return texts 
+
+    def save_keywords(self, cursor, entity_id: int, entity_type: str,
+                     config_id: int, keywords: List[Tuple[str, float]]) -> None:
+        """
+        Сохранение ключевых слов в базу данных
+        
+        Args:
+            cursor: Курсор базы данных
+            entity_id: ID сущности
+            entity_type: Тип сущности
+            config_id: ID конфигурации
+            keywords: Список кортежей (слово, вес)
+        """
+        # Удаляем старые ключевые слова для этой сущности и конфигурации
+        cursor.execute("""
+            DELETE FROM keywords 
+            WHERE entity_type = ? AND entity_id = ? AND configuration_id = ?
+        """, (entity_type, entity_id, config_id))
+        
+        # Сохраняем новые ключевые слова
+        cursor.executemany("""
+            INSERT INTO keywords 
+            (configuration_id, entity_type, entity_id, keyword, weight)
+            VALUES (?, ?, ?, ?, ?)
+        """, [(config_id, entity_type, entity_id, word, weight) 
+              for word, weight in keywords])
+
+    def get_keywords(self, cursor, entity_id: int, entity_type: str,
+                    config_id: int, top_n: int = 5) -> List[Tuple[str, float]]:
+        """
+        Получение ключевых слов для сущности
+        
+        Args:
+            cursor: Курсор базы данных
+            entity_id: ID сущности
+            entity_type: Тип сущности
+            config_id: ID конфигурации
+            top_n: Количество ключевых слов
+            
+        Returns:
+            Список кортежей (слово, вес)
+        """
+        cursor.execute("""
+            SELECT keyword, weight
+            FROM keywords
+            WHERE entity_type = ? AND entity_id = ? AND configuration_id = ?
+            ORDER BY weight DESC
+            LIMIT ?
+        """, (entity_type, entity_id, config_id, top_n))
+        
+        return cursor.fetchall() 
