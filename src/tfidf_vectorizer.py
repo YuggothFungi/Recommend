@@ -30,7 +30,8 @@ class TfidfDatabaseVectorizer:
         max_features=5000,  # Уменьшаем размерность для ускорения
         min_df=1,          # Учитываем все термины
         max_df=1.0,        # Учитываем все термины
-        ngram_range=(1, 2) # Учитываем биграммы для лучшего улавливания контекста
+        ngram_range=(1, 2), # Учитываем биграммы для лучшего улавливания контекста
+        norm='l2'          # Нормализация векторов
     )
     
     def __init__(self, config: VectorizationConfig):

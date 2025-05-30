@@ -22,4 +22,5 @@ wheel>=0.37.0
 # Добавляем новые зависимости
 transformers==4.38.2
 sentence-transformers==2.2.2
-torch==2.2.1 
+torch==2.2.1
+psutil==5.9.0 
