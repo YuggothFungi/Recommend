@@ -34,6 +34,267 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Обработчик переключения вкладок
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => {
+        button.addEventListener('click', async () => {
+            // Убираем активный класс у всех кнопок и вкладок
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            
+            // Добавляем активный класс выбранной кнопке и соответствующей вкладке
+            button.classList.add('active');
+            const tabId = button.getAttribute('data-tab');
+            document.getElementById(tabId).classList.add('active');
+
+            // Загружаем данные в зависимости от выбранной вкладки
+            const configId = document.getElementById('configuration-id').value;
+            if (!configId) {
+                alert('Пожалуйста, выберите конфигурацию');
+                return;
+            }
+
+            try {
+                if (tabId === 'keywords') {
+                    if (!selectedRow) {
+                        document.getElementById('keywords-list').innerHTML = '<div class="no-items">Выберите тему или функцию для просмотра ключевых слов</div>';
+                        return;
+                    }
+
+                    // Получаем ID выбранной сущности
+                    const entityId = selectedType === 'topic' ? selectedTopicId : selectedFunctionId;
+                    
+                    // Определяем тип сущности
+                    let entityType;
+                    if (selectedType === 'topic') {
+                        // Получаем тип темы из строки таблицы
+                        const typeCell = selectedRow.cells[0];
+                        entityType = typeCell.textContent.trim() === 'Л' ? 'lecture_topic' : 'practical_topic';
+                    } else {
+                        entityType = 'labor_function';
+                    }
+                    
+                    const response = await fetch(`/api/keywords?entity_id=${entityId}&entity_type=${entityType}&config_id=${configId}`);
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // Отображаем ключевые слова
+                    const keywordsList = document.getElementById('keywords-list');
+                    if (data.keywords && data.keywords.length > 0) {
+                        keywordsList.innerHTML = data.keywords.map(kw => `
+                            <div class="keyword-item">
+                                ${kw.keyword}
+                                <span class="keyword-weight">(${kw.weight.toFixed(2)})</span>
+                            </div>
+                        `).join('');
+                    } else {
+                        keywordsList.innerHTML = '<div class="no-items">Нет ключевых слов для отображения</div>';
+                    }
+                } else if (tabId === 'isolated') {
+                    const threshold = document.getElementById('threshold').value / 100;
+                    const similarityType = document.getElementById('similarity-type').value;
+                    const disciplineId = document.getElementById('discipline').value;
+                    
+                    const params = new URLSearchParams({
+                        configuration_id: configId,
+                        threshold: threshold,
+                        similarity_type: similarityType
+                    });
+                    
+                    if (disciplineId) {
+                        params.append('discipline_id', disciplineId);
+                    }
+                    
+                    const response = await fetch(`/api/isolated-elements?${params.toString()}`);
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // Отображаем изолированные темы
+                    const topicsContainer = document.getElementById('isolated-topics');
+                    if (data.topics && data.topics.length > 0) {
+                        topicsContainer.innerHTML = data.topics.map(topic => `
+                            <div class="isolated-item">
+                                <span class="item-name">${topic.name}</span>
+                                <span class="item-type">${topic.type === 'lecture' ? 'Лекция' : 'Практика'}</span>
+                                <span class="item-similarity">${topic.max_similarity ? topic.max_similarity.toFixed(2) : 'Нет данных'}</span>
+                            </div>
+                        `).join('');
+                    } else {
+                        topicsContainer.innerHTML = '<div class="no-items">Нет изолированных тем</div>';
+                    }
+                    
+                    // Отображаем изолированные функции
+                    const functionsContainer = document.getElementById('isolated-functions');
+                    if (data.functions && data.functions.length > 0) {
+                        functionsContainer.innerHTML = data.functions.map(func => `
+                            <div class="isolated-item">
+                                <span class="item-name">${func.name}</span>
+                                <span class="item-similarity">${func.max_similarity ? func.max_similarity.toFixed(2) : 'Нет данных'}</span>
+                            </div>
+                        `).join('');
+                    } else {
+                        functionsContainer.innerHTML = '<div class="no-items">Нет изолированных функций</div>';
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при загрузке данных:', error);
+                alert('Произошла ошибка при загрузке данных: ' + error.message);
+            }
+        });
+    });
+
+    // Обработчик клика по строке в таблице тем
+    topicsTable.addEventListener('click', function(e) {
+        const row = e.target.closest('tr');
+        if (!row) return;
+        
+        // Убираем выделение с предыдущей выбранной строки
+        if (selectedRow) {
+            selectedRow.classList.remove('selected');
+        }
+        
+        // Выделяем новую строку
+        row.classList.add('selected');
+        selectedRow = row;
+        selectedType = 'topic';
+        
+        // Сохраняем ID темы
+        selectedTopicId = row.dataset.id;
+        selectedFunctionId = null;
+        
+        // Загружаем сходство и рекомендации
+        loadSimilarities(selectedTopicId);
+        loadSimilarityComparison(selectedTopicId);
+    });
+
+    // Обработчик клика по строке в таблице функций
+    functionsTable.addEventListener('click', function(e) {
+        const row = e.target.closest('tr');
+        if (!row) return;
+        
+        // Убираем выделение с предыдущей выбранной строки
+        if (selectedRow) {
+            selectedRow.classList.remove('selected');
+        }
+        
+        // Выделяем новую строку
+        row.classList.add('selected');
+        selectedRow = row;
+        selectedType = 'function';
+        
+        // Сохраняем ID функции
+        selectedFunctionId = row.dataset.id;
+        selectedTopicId = null;
+        
+        // Загружаем темы для выбранной функции
+        loadTopicsByFunction(selectedFunctionId);
+    });
+
+    // Обработчик для кнопки "Найти рекомендации"
+    document.getElementById('find-recommendations').addEventListener('click', async function() {
+        const configId = document.getElementById('configuration-id').value;
+        const disciplineId = document.getElementById('discipline').value;
+        const similarityType = document.getElementById('similarity-type').value;
+
+        if (!configId || !disciplineId) {
+            alert('Пожалуйста, выберите конфигурацию и дисциплину');
+            return;
+        }
+
+        try {
+            // Загружаем текстовые формулировки
+            const response = await fetch(`/api/recommendations?config_id=${configId}&discipline_id=${disciplineId}&similarity_type=${similarityType}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            // Отображаем текстовые формулировки
+            const textFormulations = document.getElementById('text-formulations');
+            textFormulations.innerHTML = '';
+            
+            if (data.recommendations && data.recommendations.length > 0) {
+                data.recommendations.forEach(rec => {
+                    const div = document.createElement('div');
+                    div.className = rec.type === 'warning' ? 'recommendation-warning' : 'recommendation-info';
+                    div.textContent = rec.message;
+                    textFormulations.appendChild(div);
+                });
+            } else {
+                textFormulations.innerHTML = '<div class="recommendation-info">Нет рекомендаций для отображения</div>';
+            }
+
+            // Загружаем ключевые слова
+            const keywordsResponse = await fetch(`/api/keywords?config_id=${configId}&discipline_id=${disciplineId}`);
+            const keywordsData = await keywordsResponse.json();
+            
+            const keywordsContainer = document.getElementById('keywords');
+            keywordsContainer.innerHTML = '';
+            
+            if (keywordsData.keywords && keywordsData.keywords.length > 0) {
+                keywordsData.keywords.forEach(keyword => {
+                    const div = document.createElement('div');
+                    div.className = 'keyword-item';
+                    div.innerHTML = `
+                        <span>${keyword.word}</span>
+                        <span class="keyword-weight">${keyword.weight.toFixed(2)}</span>
+                    `;
+                    keywordsContainer.appendChild(div);
+                });
+            } else {
+                keywordsContainer.innerHTML = '<div class="no-items">Нет ключевых слов для отображения</div>';
+            }
+
+            // Загружаем изолированные элементы
+            const isolatedResponse = await fetch(`/api/isolated?config_id=${configId}&discipline_id=${disciplineId}&similarity_type=${similarityType}`);
+            const isolatedData = await isolatedResponse.json();
+            
+            const isolatedContainer = document.getElementById('isolated');
+            isolatedContainer.innerHTML = '';
+            
+            if (isolatedData.sections && isolatedData.sections.length > 0) {
+                isolatedData.sections.forEach(section => {
+                    const sectionDiv = document.createElement('div');
+                    sectionDiv.className = 'isolated-section';
+                    sectionDiv.innerHTML = `<h3>${section.name}</h3>`;
+                    
+                    if (section.items && section.items.length > 0) {
+                        section.items.forEach(item => {
+                            const itemDiv = document.createElement('div');
+                            itemDiv.className = 'isolated-item';
+                            itemDiv.innerHTML = `
+                                <span class="item-name">${item.name}</span>
+                                <span class="item-type">${item.type}</span>
+                                <span class="item-similarity">${item.similarity.toFixed(2)}</span>
+                            `;
+                            sectionDiv.appendChild(itemDiv);
+                        });
+                    } else {
+                        sectionDiv.innerHTML += '<div class="no-items">Нет изолированных элементов</div>';
+                    }
+                    
+                    isolatedContainer.appendChild(sectionDiv);
+                });
+            } else {
+                isolatedContainer.innerHTML = '<div class="no-items">Нет изолированных элементов для отображения</div>';
+            }
+
+            // Активируем вкладку с текстовыми формулировками
+            document.querySelector('[data-tab="text-formulations"]').click();
+
+        } catch (error) {
+            console.error('Ошибка при загрузке рекомендаций:', error);
+            alert('Произошла ошибка при загрузке рекомендаций: ' + error.message);
+        }
+    });
+
     // Функция для логирования
     function log(message, data = null) {
         console.log(`[${new Date().toISOString()}] ${message}`, data || '');
@@ -204,37 +465,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Обработчик клика по строке функции
-    functionsTable.onclick = function(event) {
-        const row = event.target.closest('tr');
-        if (!row) return;
-        // Получаем имя функции из первой ячейки
-        const nameCell = row.cells[0];
-        if (!nameCell) return;
-        // Находим id функции по имени (можно добавить data-id в строку при генерации)
-        const funcName = nameCell.textContent;
-        // Найти id функции по текущему списку (лучше добавить data-id при генерации)
-        let funcId = null;
-        for (const func of lastFunctionsList) {
-            if (func.name === funcName) {
-                funcId = func.id;
-                break;
-            }
-        }
-        if (!funcId) return;
-        selectedFunctionId = funcId;
-        selectedTopicId = null;
-        loadTopicsByFunction(funcId);
-    };
-
-    // Храним последний список функций для поиска id
-    let lastFunctionsList = [];
-
     // Модифицируем updateFunctionsTable для выделения выбранной строки и дефиса в сходстве
     function updateFunctionsTable(functions) {
         log('Обновление таблицы трудовых функций:', functions);
         functionsTable.innerHTML = '';
-        lastFunctionsList = functions;
         if (!functions || functions.length === 0) {
             const row = document.createElement('tr');
             row.innerHTML = `<td colspan="2" style="text-align:center; color:#888;">Нет подходящих функций</td>`;
@@ -453,261 +687,4 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedTopicId = null;
         loadSimilarities(functionId);
     }
-
-    // Обработчик клика по строке в таблице тем
-    document.querySelector('#topics-table tbody').addEventListener('click', function(e) {
-        const row = e.target.closest('tr');
-        if (!row) return;
-        
-        // Убираем выделение с предыдущей выбранной строки
-        if (selectedRow) {
-            selectedRow.classList.remove('selected');
-        }
-        
-        // Выделяем новую строку
-        row.classList.add('selected');
-        selectedRow = row;
-        selectedType = 'topic';
-        
-        // Сохраняем ID темы
-        selectedTopicId = row.dataset.id;
-    });
-
-    // Обработчик клика по строке в таблице функций
-    document.querySelector('#functions-table tbody').addEventListener('click', function(e) {
-        const row = e.target.closest('tr');
-        if (!row) return;
-        
-        // Убираем выделение с предыдущей выбранной строки
-        if (selectedRow) {
-            selectedRow.classList.remove('selected');
-        }
-        
-        // Выделяем новую строку
-        row.classList.add('selected');
-        selectedRow = row;
-        selectedType = 'function';
-        
-        // Сохраняем ID функции
-        selectedFunctionId = row.dataset.id;
-    });
-
-    // Обработчик клика по кнопке "Ключевые слова"
-    document.getElementById('show-keywords').addEventListener('click', async function() {
-        if (!selectedRow) {
-            alert('Пожалуйста, выберите тему или функцию');
-            return;
-        }
-        
-        const configId = document.getElementById('configuration-id').value;
-        if (!configId) {
-            alert('Пожалуйста, выберите конфигурацию');
-            return;
-        }
-        
-        // Получаем ID выбранной сущности
-        const entityId = selectedType === 'topic' ? selectedTopicId : selectedFunctionId;
-        
-        // Определяем тип сущности
-        let entityType;
-        if (selectedType === 'topic') {
-            // Получаем тип темы из строки таблицы
-            const typeCell = selectedRow.cells[0];
-            entityType = typeCell.textContent.trim() === 'Л' ? 'lecture_topic' : 'practical_topic';
-        } else {
-            entityType = 'labor_function';
-        }
-        
-        try {
-            const response = await fetch(`/api/keywords?entity_id=${entityId}&entity_type=${entityType}&config_id=${configId}`);
-            const data = await response.json();
-            
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-            
-            // Обновляем заголовок модального окна
-            const title = selectedType === 'topic' ? 'Ключевые слова темы' : 'Ключевые слова функции';
-            document.getElementById('keywords-title').textContent = `${title}: ${data.name}`;
-            
-            // Отображаем ключевые слова
-            const keywordsList = document.getElementById('keywords-list');
-            keywordsList.innerHTML = data.keywords.map(kw => `
-                <div class="keyword-item">
-                    ${kw.keyword}
-                    <span class="keyword-weight">(${kw.weight.toFixed(2)})</span>
-                </div>
-            `).join('');
-            
-            // Показываем модальное окно
-            document.getElementById('keywords-modal').style.display = 'block';
-        } catch (error) {
-            console.error('Ошибка при загрузке ключевых слов:', error);
-            alert('Ошибка при загрузке ключевых слов');
-        }
-    });
-
-    // Закрытие модального окна при клике вне его области
-    document.getElementById('keywords-modal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            this.style.display = 'none';
-        }
-    });
-
-    // Обработчик клика по кнопке "Изолированные элементы"
-    document.getElementById('show-isolated').addEventListener('click', async function() {
-        const configId = document.getElementById('configuration-id').value;
-        if (!configId) {
-            alert('Пожалуйста, выберите конфигурацию');
-            return;
-        }
-        
-        const threshold = document.getElementById('threshold').value / 100;
-        const similarityType = document.getElementById('similarity-type').value;
-        const disciplineId = document.getElementById('discipline').value;
-        
-        try {
-            const params = new URLSearchParams({
-                configuration_id: configId,
-                threshold: threshold,
-                similarity_type: similarityType
-            });
-            
-            if (disciplineId) {
-                params.append('discipline_id', disciplineId);
-            }
-            
-            const response = await fetch(`/api/isolated-elements?${params.toString()}`);
-            const data = await response.json();
-            
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-            
-            // Отображаем изолированные темы
-            const topicsContainer = document.getElementById('isolated-topics');
-            if (data.topics.length === 0) {
-                topicsContainer.innerHTML = '<div class="no-items">Нет изолированных тем</div>';
-            } else {
-                topicsContainer.innerHTML = data.topics.map(topic => `
-                    <div class="isolated-item">
-                        <span class="item-name">${topic.name}</span>
-                        <span class="item-type">${topic.type === 'lecture' ? 'Лекция' : 'Практика'}</span>
-                        <span class="item-similarity">${topic.max_similarity ? topic.max_similarity.toFixed(2) : 'Нет данных'}</span>
-                    </div>
-                `).join('');
-            }
-            
-            // Отображаем изолированные функции
-            const functionsContainer = document.getElementById('isolated-functions');
-            if (data.functions.length === 0) {
-                functionsContainer.innerHTML = '<div class="no-items">Нет изолированных функций</div>';
-            } else {
-                functionsContainer.innerHTML = data.functions.map(func => `
-                    <div class="isolated-item">
-                        <span class="item-name">${func.name}</span>
-                        <span class="item-similarity">${func.max_similarity ? func.max_similarity.toFixed(2) : 'Нет данных'}</span>
-                    </div>
-                `).join('');
-            }
-            
-            // Показываем модальное окно
-            document.getElementById('isolated-modal').style.display = 'block';
-        } catch (error) {
-            console.error('Ошибка при загрузке изолированных элементов:', error);
-            alert('Ошибка при загрузке изолированных элементов');
-        }
-    });
-
-    // Закрытие модального окна изолированных элементов при клике вне его области
-    document.getElementById('isolated-modal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            this.style.display = 'none';
-        }
-    });
-
-    // Обработчик для кнопки рекомендаций по часам
-    document.getElementById('show-hours-recommendations').addEventListener('click', async function() {
-        const configId = document.getElementById('configuration-id').value;
-        const threshold = document.getElementById('threshold').value;
-        const similarityType = document.getElementById('similarity-type').value;
-        const disciplineId = document.getElementById('discipline').value;
-
-        if (!configId) {
-            alert('Пожалуйста, выберите конфигурацию');
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/hours-recommendations?configuration_id=${configId}&threshold=${threshold}&similarity_type=${similarityType}&discipline_id=${disciplineId}`);
-            const data = await response.json();
-
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-
-            // Отображаем статистику
-            const statsHtml = `
-                <h3>Статистика по часам</h3>
-                <div class="stat-item">
-                    <span class="stat-label">Среднее количество часов:</span>
-                    <span class="stat-value">${data.stats.avg_hours.toFixed(1)}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Максимальное количество часов:</span>
-                    <span class="stat-value">${data.stats.max_hours}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Минимальное количество часов:</span>
-                    <span class="stat-value">${data.stats.min_hours}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">75-й процентиль:</span>
-                    <span class="stat-value">${data.stats.percentile_75.toFixed(1)}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">25-й процентиль:</span>
-                    <span class="stat-value">${data.stats.percentile_25.toFixed(1)}</span>
-                </div>
-            `;
-            document.getElementById('hours-statistics').innerHTML = statsHtml;
-
-            // Отображаем рекомендации
-            const recommendationsHtml = data.recommendations.map(rec => `
-                <div class="recommendation-item ${rec.type === 'high_hours' ? 'high-hours' : 'low-hours'}">
-                    <div class="topic-info">
-                        <span class="topic-name">${rec.topic_name}</span>
-                        <span class="topic-hours">${rec.hours} часов</span>
-                    </div>
-                    <div class="topic-type">${rec.topic_type === 'lecture' ? 'Лекция' : 'Практика'}</div>
-                    <div class="recommendation-message">${rec.message}</div>
-                    <div class="similarity-info">
-                        Средняя схожесть: ${(rec.avg_similarity * 100).toFixed(1)}%
-                    </div>
-                </div>
-            `).join('');
-            document.getElementById('hours-recommendations-list').innerHTML = recommendationsHtml;
-
-            // Показываем модальное окно
-            document.getElementById('hours-recommendations-modal').style.display = 'block';
-        } catch (error) {
-            console.error('Ошибка при получении рекомендаций:', error);
-            alert('Произошла ошибка при получении рекомендаций');
-        }
-    });
-
-    // Закрытие модального окна рекомендаций
-    document.getElementById('hours-recommendations-modal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            this.style.display = 'none';
-        }
-    });
-
-    // Инициализация
-    log('Инициализация приложения...');
-    loadConfigurations();
-    loadDisciplines();
-}); 
+});

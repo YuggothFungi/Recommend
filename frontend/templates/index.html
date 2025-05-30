@@ -5,31 +5,27 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <div class="controls">
-        <select id="discipline">
-            <option value="">Выберите дисциплину</option>
-        </select>
-        
-        <label>
-            Порог сходства:
-            <input type="range" id="threshold" min="0" max="100" value="30">
-            <span id="threshold-value">0.30</span>
-        </label>
-        
-        <select id="similarity-type">
-            <option value="rubert">ruBERT</option>
-            <option value="tfidf">TF-IDF</option>
-        </select>
-        
-        <select id="configuration-id">
-            <option value="">Выберите конфигурацию</option>
-        </select>
-
-        <button id="show-keywords" class="button">Ключевые слова</button>
-        <button id="show-isolated" class="button">Изолированные элементы</button>
-    </div>
-
     <div class="main-content">
+        <div class="controls">
+            <select id="configuration-id" class="form-control">
+                <option value="">Выберите конфигурацию</option>
+            </select>
+            <select id="discipline" class="form-control">
+                <option value="">Выберите дисциплину</option>
+            </select>
+            <select id="similarity-type" class="form-control">
+                <option value="rubert">RuBERT</option>
+                <option value="tfidf">TF-IDF</option>
+            </select>
+            <div class="threshold-control">
+                <label>
+                    Порог сходства:
+                    <input type="range" id="threshold" min="0" max="100" value="30">
+                    <span id="threshold-value">0.30</span>
+                </label>
+            </div>
+        </div>
+
         <div class="tables-container">
             <div class="table-container">
                 <div class="table-header">Учебные темы</div>
@@ -61,27 +57,20 @@
         </div>
     </div>
 
-    <div id="recommendations"></div>
-
-    <!-- Модальное окно для ключевых слов -->
-    <div id="keywords-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="keywords-title">Ключевые слова</h2>
+    <div class="recommendations-panel">
+        <div class="tabs">
+            <button class="tab-button active" data-tab="text-formulations">Текстовые формулировки</button>
+            <button class="tab-button" data-tab="keywords">Ключевые слова</button>
+            <button class="tab-button" data-tab="isolated">Изолированные элементы</button>
+        </div>
+        <div class="tab-content">
+            <div id="text-formulations" class="tab-pane active">
+                <div id="recommendations"></div>
             </div>
-            <div class="modal-body">
+            <div id="keywords" class="tab-pane">
                 <div id="keywords-list"></div>
             </div>
-        </div>
-    </div>
-
-    <!-- Модальное окно для изолированных элементов -->
-    <div id="isolated-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Изолированные элементы</h2>
-            </div>
-            <div class="modal-body">
+            <div id="isolated" class="tab-pane">
                 <div class="isolated-section">
                     <h3>Темы</h3>
                     <div id="isolated-topics"></div>
@@ -94,22 +83,11 @@
         </div>
     </div>
 
-    <!-- Модальное окно для рекомендаций по часам -->
-    <div id="hours-recommendations-modal" class="modal">
+    <!-- Модальные окна -->
+    <div id="loading-modal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h2>Рекомендации по часам</h2>
-            </div>
-            <div class="modal-body">
-                <div class="recommendations-stats">
-                    <h3>Статистика по часам</h3>
-                    <div id="hours-statistics"></div>
-                </div>
-                <div class="recommendations-list">
-                    <h3>Рекомендации</h3>
-                    <div id="hours-recommendations-list"></div>
-                </div>
-            </div>
+            <div class="spinner"></div>
+            <p>Загрузка...</p>
         </div>
     </div>
 
