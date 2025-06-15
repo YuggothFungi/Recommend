@@ -4,6 +4,7 @@ class TopicsView {
     }
 
     render(topics, selectedTopic) {
+        console.log('TopicsView: render', { topics, selectedTopic });
         const topicsToShow = selectedTopic
             ? topics.filter(
                 t => String(t.id) === String(selectedTopic.id) && String(t.type) === String(selectedTopic.type)
@@ -54,6 +55,7 @@ class TopicsView {
             closeButton.innerHTML = '&times;';
             closeButton.addEventListener('click', (e) => {
                 e.stopPropagation();
+                console.log('TopicsView: выбрасываем topicDeselected (closeButton)');
                 this.container.dispatchEvent(new CustomEvent('topicDeselected', { bubbles: true }));
             });
             card.appendChild(closeButton);
@@ -68,8 +70,10 @@ class TopicsView {
                 String(clickedTopicType) === String(selectedTopic.type)
             ) {
                 // Повторный клик по выделенной теме — сброс выделения
+                console.log('TopicsView: выбрасываем topicDeselected (card)');
                 this.container.dispatchEvent(new CustomEvent('topicDeselected', { bubbles: true }));
             } else {
+                console.log('TopicsView: выбрасываем topicSelected', { topicId: clickedTopicId, topicType: clickedTopicType });
                 this.container.dispatchEvent(new CustomEvent('topicSelected', {
                     detail: { topicId: clickedTopicId, topicType: clickedTopicType },
                     bubbles: true

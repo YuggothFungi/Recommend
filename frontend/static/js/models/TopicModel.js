@@ -32,9 +32,10 @@ class TopicModel {
         }
     }
 
-    // Получение темы по ID
-    getTopicById(id) {
-        return this.topics.find(topic => topic.id === id);
+    // Получение темы по ID и типу
+    getTopicByIdType(id, type) {
+        console.log('TopicModel: getTopicByIdType', id, type);
+        return this.topics.find(topic => String(topic.id) === String(id) && String(topic.type) === String(type));
     }
 
     // Получение всех тем

@@ -48,12 +48,12 @@ class SimilarityModel {
     }
 
     // Загрузка сходства для темы
-    async loadTopicSimilarities(topicId) {
+    async loadTopicSimilarities(topicId, topicType) {
         if (!this.state.configurationId) {
             throw new Error('Не выбрана конфигурация');
         }
 
-        const cacheKey = `${topicId}_${this.state.threshold}_${this.state.similarityType}_${this.state.configurationId}`;
+        const cacheKey = `${topicId}_${topicType}_${this.state.threshold}_${this.state.similarityType}_${this.state.configurationId}`;
         
         if (this.cache.topicSimilarities.has(cacheKey)) {
             return this.cache.topicSimilarities.get(cacheKey);
@@ -62,6 +62,7 @@ class SimilarityModel {
         try {
             const params = new URLSearchParams({
                 topic_id: topicId,
+                topic_type: topicType,
                 threshold: this.state.threshold,
                 similarity_type: this.state.similarityType,
                 configuration_id: this.state.configurationId
@@ -159,9 +160,9 @@ class SimilarityModel {
     }
 
     // Получение похожих функций для темы
-    async getSimilarFunctions(topicId) {
+    async getSimilarFunctions(topicId, topicType) {
         try {
-            const data = await this.loadTopicSimilarities(topicId);
+            const data = await this.loadTopicSimilarities(topicId, topicType);
             return data.functions || [];
         } catch (error) {
             console.error('Ошибка при получении похожих функций:', error);

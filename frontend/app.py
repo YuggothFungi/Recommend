@@ -128,35 +128,38 @@ def get_labor_functions():
 def get_similarities():
     try:
         topic_id = request.args.get('topic_id')
+        topic_type = request.args.get('topic_type')
         labor_function_id = request.args.get('labor_function_id')
         similarity_type = request.args.get('similarity_type', 'rubert')
         threshold = float(request.args.get('threshold', 0.0))
         configuration_id = request.args.get('configuration_id')
-        logger.debug(f"Получение сходства: topic_id={topic_id}, labor_function_id={labor_function_id}, тип={similarity_type}, порог={threshold}, конфигурация={configuration_id}")
-        
+        logger.debug(f"Получение сходства: topic_id={topic_id}, topic_type={topic_type}, labor_function_id={labor_function_id}, тип={similarity_type}, порог={threshold}, конфигурация={configuration_id}")
         if not configuration_id:
             logger.warning("Не указан ID конфигурации")
             return jsonify({'error': 'Configuration ID is required'}), 400
         if not (topic_id or labor_function_id):
             logger.warning("Не указан ни topic_id, ни labor_function_id")
             return jsonify({'error': 'Topic ID or Labor Function ID is required'}), 400
-
         conn = get_db_connection()
         cursor = conn.cursor()
         similarity_field = f"{similarity_type}_similarity"
         result = []
         if topic_id:
+            if not topic_type:
+                logger.warning("Не указан topic_type при переданном topic_id")
+                return jsonify({'error': 'Topic type is required when topic_id is provided'}), 400
             # Отбор функций по теме
             cursor.execute(f'''
                 SELECT lf.id, lf.name, MAX(sr.{similarity_field}) as similarity
                 FROM similarity_results sr
                 JOIN labor_functions lf ON lf.id = sr.labor_function_id
                 WHERE sr.topic_id = ?
+                  AND sr.topic_type = ?
                   AND sr.configuration_id = ?
                   AND sr.{similarity_field} > ?
                 GROUP BY lf.id, lf.name
                 ORDER BY similarity DESC
-            ''', (topic_id, configuration_id, threshold))
+            ''', (topic_id, topic_type, configuration_id, threshold))
             for row in cursor.fetchall():
                 result.append({
                     'id': row['id'],

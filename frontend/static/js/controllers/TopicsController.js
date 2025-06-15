@@ -14,24 +14,29 @@ class TopicsController {
 
     handleTopicsChange() {
         const topics = this.topicModel.getAllTopics();
+        console.log('TopicsController: handleTopicsChange, render all topics');
         this.topicsView.render(topics, null);
     }
 
     async handleTopicSelect(event) {
+        console.log('TopicsController: handleTopicSelect', event.detail);
         const { topicId, topicType } = event.detail;
-        const topic = this.topicModel.getTopicById(topicId);
+        const topic = this.topicModel.getTopicByIdType(topicId, topicType);
         if (topic) {
             this.selectionController.selectTopic(topic);
             // После выбора темы отображаем только выбранную тему
             const topics = this.topicModel.getAllTopics();
+            console.log('TopicsController: render only selected topic', topic);
             this.topicsView.render(topics, topic);
         }
     }
 
     handleTopicDeselect() {
+        console.log('TopicsController: handleTopicDeselect');
         this.selectionController.clearSelection();
         // После снятия выбора отображаем все темы
         const topics = this.topicModel.getAllTopics();
+        console.log('TopicsController: render all topics (deselect)');
         this.topicsView.render(topics, null);
     }
 

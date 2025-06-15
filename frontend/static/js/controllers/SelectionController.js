@@ -8,12 +8,12 @@ class SelectionController {
     }
 
     async selectTopic(topic) {
+        console.log('SelectionController: selectTopic', topic);
         this.selectedTopic = topic;
         this.selectedFunction = null;
-        this.topicsView.setSelectedTopic(topic);
         this.functionsView.setSelectedFunction(null);
         try {
-            const functions = await this.similarityModel.getSimilarFunctions(topic.id);
+            const functions = await this.similarityModel.getSimilarFunctions(topic.id, topic.type);
             this.functionsView.render(functions);
         } catch (error) {
             console.error('Ошибка при загрузке функций:', error);
@@ -38,7 +38,6 @@ class SelectionController {
     clearSelection() {
         this.selectedTopic = null;
         this.selectedFunction = null;
-        this.topicsView.setSelectedTopic(null);
         this.functionsView.setSelectedFunction(null);
     }
 
