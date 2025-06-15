@@ -1,5 +1,3 @@
-import sys
-import os
 import time
 import psutil
 import numpy as np

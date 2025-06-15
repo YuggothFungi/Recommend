@@ -1,0 +1,160 @@
+/* Контейнеры для карточек */
+.content-container {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    height: calc(100vh - 200px);
+}
+
+.topics-container,
+.functions-container {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 10px;
+}
+
+/* Сетка карточек */
+.topics-grid,
+.functions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+    padding: 10px;
+}
+
+/* Базовые стили карточек */
+.topic-card,
+.function-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-height: 130px; /* Увеличиваем базовую высоту */
+    position: relative;
+}
+
+/* Эффект при наведении */
+.topic-card:hover,
+.function-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Выбранная карточка */
+.topic-card.selected,
+.function-card.selected {
+    background: #f5f5f5;
+    border-color: #2196f3;
+}
+
+/* Карточки с высоким сходством */
+.topic-card.high-similarity,
+.function-card.high-similarity {
+    background: rgba(76, 175, 80, 0.1);
+}
+
+/* Заголовок карточки */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+/* Основное содержимое карточки */
+.card-body {
+    flex-grow: 1;
+    margin-bottom: 10px;
+}
+
+.card-body h3 {
+    margin: 0;
+    font-size: 1.1em;
+    color: #333;
+    line-height: 1.4;
+}
+
+/* Подвал карточки */
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+}
+
+/* Значение сходства */
+.similarity-value {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #2196f3;
+}
+
+/* Метки для тем */
+.topic-type {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.topic-type.lecture {
+    background-color: #ffeb3b;
+    color: #000;
+}
+
+.topic-type.practical {
+    background-color: #e040fb;
+    color: #fff;
+}
+
+.topic-hours {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: #f5f5f5;
+    font-size: 0.9em;
+}
+
+/* Стили для скроллбара */
+.topics-container::-webkit-scrollbar,
+.functions-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.topics-container::-webkit-scrollbar-track,
+.functions-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.topics-container::-webkit-scrollbar-thumb,
+.functions-container::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.topics-container::-webkit-scrollbar-thumb:hover,
+.functions-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .topics-grid,
+    .functions-grid {
+        grid-template-columns: 1fr;
+    }
+} 

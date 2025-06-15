@@ -3,6 +3,7 @@
 <head>
     <title>Рекомендательная система</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cards.css') }}">
 </head>
 <body>
     <div class="main-content">
@@ -26,33 +27,13 @@
             </div>
         </div>
 
-        <div class="tables-container">
-            <div class="table-container">
-                <div class="table-header">Учебные темы</div>
-                <table id="topics-table">
-                    <thead>
-                        <tr>
-                            <th>Тип</th>
-                            <th>Название</th>
-                            <th>Часы</th>
-                            <th>Сходство</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+        <div class="content-container">
+            <div id="topics-container" class="topics-container">
+                <!-- Здесь будет отображаться карточное представление тем -->
             </div>
             
-            <div class="table-container">
-                <div class="table-header">Трудовые функции</div>
-                <table id="functions-table">
-                    <thead>
-                        <tr>
-                            <th>Название</th>
-                            <th>Сходство</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+            <div id="functions-container" class="functions-container">
+                <!-- Здесь будет отображаться карточное представление функций -->
             </div>
         </div>
     </div>
@@ -91,6 +72,22 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- Подключаем модели -->
+    <script type="module" src="{{ url_for('static', filename='js/models/SelectionModel.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/models/TopicModel.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/models/FunctionModel.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/models/SimilarityModel.js') }}"></script>
+
+    <!-- Подключаем представления -->
+    <script type="module" src="{{ url_for('static', filename='js/views/TopicsView.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/views/FunctionsView.js') }}"></script>
+
+    <!-- Подключаем контроллеры -->
+    <script type="module" src="{{ url_for('static', filename='js/controllers/SelectionController.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/controllers/TopicsController.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/controllers/FunctionsController.js') }}"></script>
+
+    <!-- Подключаем основной файл приложения -->
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html> 
