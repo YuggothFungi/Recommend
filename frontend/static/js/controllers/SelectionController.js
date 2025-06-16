@@ -13,8 +13,9 @@ class SelectionController {
         this.selectedFunction = null;
         this.functionsView.setSelectedFunction(null);
         try {
-            const functions = await this.similarityModel.getSimilarFunctions(topic.id, topic.type);
-            this.functionsView.render(functions);
+            const similarities = await this.similarityModel.loadTopicSimilarities(topic.id, topic.type);
+            const functions = similarities.functions || [];
+            this.functionsView.render(functions, similarities);
         } catch (error) {
             console.error('Ошибка при загрузке функций:', error);
         }
