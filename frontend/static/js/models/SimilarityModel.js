@@ -159,6 +159,10 @@ class SimilarityModel {
         return { ...this.state };
     }
 
+    getConfigurationId() {
+        return this.state.configurationId;
+    }
+
     // Получение похожих функций для темы
     async getSimilarFunctions(topicId, topicType) {
         try {

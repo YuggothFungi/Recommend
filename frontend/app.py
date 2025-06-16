@@ -273,10 +273,13 @@ def analyze_similarity_comparison(comparison, threshold=0.3):
 @app.route('/api/similarity-comparison')
 def get_similarity_comparison():
     topic_id = request.args.get('topic_id')
+    topic_type = request.args.get('topic_type')
     configuration_id = request.args.get('configuration_id')
     
     if not topic_id:
         return jsonify({'error': 'Не указан ID темы'}), 400
+    if not topic_type:
+        return jsonify({'error': 'Не указан тип темы'}), 400
     if not configuration_id:
         return jsonify({'error': 'Не указан ID конфигурации'}), 400
         
@@ -290,9 +293,10 @@ def get_similarity_comparison():
             FROM similarity_results sr
             JOIN labor_functions lf ON lf.id = sr.labor_function_id
             WHERE sr.topic_id = ?
+              AND sr.topic_type = ?
               AND sr.configuration_id = ?
             GROUP BY lf.id, lf.name
-        ''', (topic_id, configuration_id))
+        ''', (topic_id, topic_type, configuration_id))
         tfidf_similarities = []
         for row in cursor.fetchall():
             tfidf_similarities.append({
@@ -307,9 +311,10 @@ def get_similarity_comparison():
             FROM similarity_results sr
             JOIN labor_functions lf ON lf.id = sr.labor_function_id
             WHERE sr.topic_id = ?
+              AND sr.topic_type = ?
               AND sr.configuration_id = ?
             GROUP BY lf.id, lf.name
-        ''', (topic_id, configuration_id))
+        ''', (topic_id, topic_type, configuration_id))
         rubert_similarities = []
         for row in cursor.fetchall():
             rubert_similarities.append({

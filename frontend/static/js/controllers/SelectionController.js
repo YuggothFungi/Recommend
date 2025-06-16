@@ -50,6 +50,10 @@ class SelectionController {
         return this.selectedFunction;
     }
 
+    getConfigurationId() {
+        return this.similarityModel.getConfigurationId();
+    }
+
     async handleSelectionChange() {
         const state = this.selectionModel.getState();
         try {

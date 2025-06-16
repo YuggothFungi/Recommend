@@ -37,6 +37,35 @@ class TopicsController {
             const topics = this.topicModel.getAllTopics();
             console.log('TopicsController: render only selected topic', topic);
             this.topicsView.render(topics, topic);
+            
+            // Загружаем рекомендации для выбранной темы
+            await this.loadRecommendations(topicId, topicType);
+        }
+    }
+
+    async loadRecommendations(topicId, topicType) {
+        try {
+            const configId = this.selectionController.getConfigurationId();
+            if (!configId) {
+                console.warn('Не выбрана конфигурация для загрузки рекомендаций');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                topic_id: topicId,
+                topic_type: topicType,
+                configuration_id: configId
+            });
+
+            const response = await fetch(`/api/similarity-comparison?${params.toString()}`);
+            if (!response.ok) {
+                throw new Error('Ошибка при загрузке рекомендаций');
+            }
+
+            const data = await response.json();
+            this.updateRecommendations(data.recommendations);
+        } catch (error) {
+            console.error('Ошибка при загрузке рекомендаций:', error);
         }
     }
 
@@ -51,6 +80,8 @@ class TopicsController {
         console.log('TopicsController: render all functions (deselect)');
         const functions = this.functionsController.getAllFunctions();
         this.functionsView.render(functions); // только список, без сходства
+        // Сбрасываем рекомендации
+        this.updateRecommendations([]);
     }
 
     async loadTopics(disciplineId) {
