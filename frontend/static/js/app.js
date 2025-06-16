@@ -73,7 +73,7 @@ class App {
         // Обработчик переключения вкладок
         const tabButtons = document.querySelectorAll('.tab-button');
         tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
+            button.addEventListener('click', async () => {
                 // Убираем активный класс у всех кнопок и панелей
                 document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
                 document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
@@ -82,6 +82,11 @@ class App {
                 button.classList.add('active');
                 const tabId = button.getAttribute('data-tab');
                 document.getElementById(tabId).classList.add('active');
+
+                // Если выбрана вкладка "Изолированные элементы", загружаем данные
+                if (tabId === 'isolated') {
+                    await this.loadIsolatedElements();
+                }
             });
         });
 
@@ -137,33 +142,117 @@ class App {
         }
     }
 
-    handleConfigurationChange() {
-        const configId = this.configurationSelect.value;
+    async handleConfigurationChange(event) {
+        const configId = event.target.value;
         if (configId) {
             this.similarityModel.setConfigurationId(configId);
-        }
-    }
-
-    async handleDisciplineChange() {
-        const disciplineId = this.disciplineSelect.value;
-        if (disciplineId) {
-            try {
-                await this.topicsController.loadTopics(disciplineId);
-            } catch (error) {
-                console.error('Ошибка при загрузке тем:', error);
+            // Если открыта вкладка с изолированными элементами, обновляем данные
+            if (document.querySelector('.tab-button[data-tab="isolated"]').classList.contains('active')) {
+                await this.loadIsolatedElements();
             }
         }
     }
 
-    handleSimilarityTypeChange() {
-        const type = this.similarityTypeSelect.value;
-        this.similarityModel.setSimilarityType(type);
+    async handleDisciplineChange(event) {
+        const disciplineId = event.target.value;
+        if (disciplineId) {
+            await this.topicModel.loadTopics(disciplineId);
+            // Если открыта вкладка с изолированными элементами, обновляем данные
+            if (document.querySelector('.tab-button[data-tab="isolated"]').classList.contains('active')) {
+                await this.loadIsolatedElements();
+            }
+        }
     }
 
-    handleThresholdChange() {
-        const value = this.thresholdSlider.value / 100;
+    async handleSimilarityTypeChange(event) {
+        const type = event.target.value;
+        this.similarityModel.setSimilarityType(type);
+        // Если открыта вкладка с изолированными элементами, обновляем данные
+        if (document.querySelector('.tab-button[data-tab="isolated"]').classList.contains('active')) {
+            await this.loadIsolatedElements();
+        }
+    }
+
+    async handleThresholdChange(event) {
+        const value = event.target.value / 100;
         this.thresholdValue.textContent = value.toFixed(2);
         this.similarityModel.setThreshold(value);
+        // Если открыта вкладка с изолированными элементами, обновляем данные
+        if (document.querySelector('.tab-button[data-tab="isolated"]').classList.contains('active')) {
+            await this.loadIsolatedElements();
+        }
+    }
+
+    async loadIsolatedElements() {
+        try {
+            const configId = this.configurationSelect.value;
+            const disciplineId = this.disciplineSelect.value;
+            const similarityType = this.similarityTypeSelect.value;
+            const threshold = this.thresholdSlider.value / 100;
+
+            if (!configId) {
+                console.warn('Не выбрана конфигурация для загрузки изолированных элементов');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                configuration_id: configId,
+                similarity_type: similarityType,
+                threshold: threshold
+            });
+
+            if (disciplineId) {
+                params.append('discipline_id', disciplineId);
+            }
+
+            const response = await fetch(`/api/isolated-elements?${params.toString()}`);
+            if (!response.ok) {
+                throw new Error('Ошибка при загрузке изолированных элементов');
+            }
+
+            const data = await response.json();
+            this.updateIsolatedElements(data);
+        } catch (error) {
+            console.error('Ошибка при загрузке изолированных элементов:', error);
+        }
+    }
+
+    updateIsolatedElements(data) {
+        const topicsContainer = document.getElementById('isolated-topics');
+        const functionsContainer = document.getElementById('isolated-functions');
+
+        // Обновляем список изолированных тем
+        topicsContainer.innerHTML = '';
+        if (data.topics && data.topics.length > 0) {
+            data.topics.forEach(topic => {
+                const div = document.createElement('div');
+                div.className = 'isolated-item';
+                div.innerHTML = `
+                    <span class="item-name">${topic.name}</span>
+                    <span class="item-type">${topic.type === 'lecture' ? 'Л' : 'П'}</span>
+                    <span class="item-similarity">${topic.max_similarity ? topic.max_similarity.toFixed(2) : 'Нет'}</span>
+                `;
+                topicsContainer.appendChild(div);
+            });
+        } else {
+            topicsContainer.innerHTML = '<div class="no-items">Нет изолированных тем</div>';
+        }
+
+        // Обновляем список изолированных функций
+        functionsContainer.innerHTML = '';
+        if (data.functions && data.functions.length > 0) {
+            data.functions.forEach(func => {
+                const div = document.createElement('div');
+                div.className = 'isolated-item';
+                div.innerHTML = `
+                    <span class="item-name">${func.name}</span>
+                    <span class="item-similarity">${func.max_similarity ? func.max_similarity.toFixed(2) : 'Нет'}</span>
+                `;
+                functionsContainer.appendChild(div);
+            });
+        } else {
+            functionsContainer.innerHTML = '<div class="no-items">Нет изолированных функций</div>';
+        }
     }
 }
 
