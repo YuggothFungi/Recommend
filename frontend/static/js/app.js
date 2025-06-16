@@ -70,6 +70,21 @@ class App {
         this.similarityTypeSelect.addEventListener('change', this.handleSimilarityTypeChange.bind(this));
         this.thresholdSlider.addEventListener('input', this.handleThresholdChange.bind(this));
 
+        // Обработчик переключения вкладок
+        const tabButtons = document.querySelectorAll('.tab-button');
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Убираем активный класс у всех кнопок и панелей
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+                
+                // Добавляем активный класс выбранной кнопке и соответствующей панели
+                button.classList.add('active');
+                const tabId = button.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
         // Загрузка начальных данных
         this.loadConfigurations();
         this.loadDisciplines();

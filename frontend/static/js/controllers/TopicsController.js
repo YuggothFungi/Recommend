@@ -40,6 +40,8 @@ class TopicsController {
             
             // Загружаем рекомендации для выбранной темы
             await this.loadRecommendations(topicId, topicType);
+            // Загружаем ключевые слова для выбранной темы
+            await this.loadKeywords(topicId, topicType);
         }
     }
 
@@ -69,6 +71,61 @@ class TopicsController {
         }
     }
 
+    async loadKeywords(topicId, topicType) {
+        try {
+            const configId = this.selectionController.getConfigurationId();
+            if (!configId) {
+                console.warn('Не выбрана конфигурация для загрузки ключевых слов');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                entity_id: topicId,
+                entity_type: topicType === 'lecture' ? 'lecture_topic' : 'practical_topic',
+                config_id: configId
+            });
+
+            const response = await fetch(`/api/keywords?${params.toString()}`);
+            if (!response.ok) {
+                throw new Error('Ошибка при загрузке ключевых слов');
+            }
+
+            const data = await response.json();
+            this.updateKeywords(data);
+        } catch (error) {
+            console.error('Ошибка при загрузке ключевых слов:', error);
+        }
+    }
+
+    updateKeywords(data) {
+        const keywordsDiv = document.getElementById('keywords-list');
+        if (!keywordsDiv) return;
+
+        keywordsDiv.innerHTML = '';
+        
+        if (!data || !data.keywords || data.keywords.length === 0) {
+            const div = document.createElement('div');
+            div.textContent = 'Нет ключевых слов';
+            div.classList.add('keywords-info');
+            keywordsDiv.appendChild(div);
+            return;
+        }
+
+        // Добавляем название темы
+        const titleDiv = document.createElement('div');
+        titleDiv.textContent = data.name;
+        titleDiv.classList.add('keywords-title');
+        keywordsDiv.appendChild(titleDiv);
+
+        // Добавляем список ключевых слов
+        data.keywords.forEach(kw => {
+            const itemDiv = document.createElement('div');
+            itemDiv.classList.add('keyword-item');
+            itemDiv.textContent = `${kw.keyword} (${kw.weight.toFixed(2)})`;
+            keywordsDiv.appendChild(itemDiv);
+        });
+    }
+
     handleTopicDeselect() {
         console.log('TopicsController: handleTopicDeselect');
         this.selectionController.clearSelection();
@@ -82,6 +139,8 @@ class TopicsController {
         this.functionsView.render(functions); // только список, без сходства
         // Сбрасываем рекомендации
         this.updateRecommendations([]);
+        // Сбрасываем ключевые слова
+        this.updateKeywords(null);
     }
 
     async loadTopics(disciplineId) {
