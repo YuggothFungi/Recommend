@@ -22,7 +22,7 @@ class App {
         this.topicsView = new TopicsView(document.getElementById('topics-container'));
         this.functionsView = new FunctionsView(document.getElementById('functions-container'));
 
-        // Инициализация контроллеров
+        // Инициализация контроллеров (двусторонняя связь через сеттеры)
         this.selectionController = new SelectionController(
             this.topicsView,
             this.functionsView,
@@ -33,14 +33,24 @@ class App {
         this.topicsController = new TopicsController(
             this.topicModel,
             this.topicsView,
-            this.selectionController
+            this.selectionController,
+            null, // functionsController
+            null  // functionsView
         );
 
         this.functionsController = new FunctionsController(
             this.functionModel,
             this.functionsView,
-            this.selectionController
+            this.selectionController,
+            null, // topicsController
+            null  // topicsView
         );
+
+        // Устанавливаем двусторонние ссылки
+        this.topicsController.setFunctionsController(this.functionsController);
+        this.topicsController.setFunctionsView(this.functionsView);
+        this.functionsController.setTopicsController(this.topicsController);
+        this.functionsController.setTopicsView(this.topicsView);
 
         // Инициализация элементов управления
         this.initializeControls();

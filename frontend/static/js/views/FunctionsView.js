@@ -21,6 +21,7 @@ class FunctionsView {
 
     // Отрисовка всех функций
     render(functions, similarities = null) {
+        console.log('FunctionsView: render', { functions, similarities });
         if (similarities && similarities.functions) {
             // Создаем Map для быстрого доступа к сходству
             const similarityMap = new Map(
@@ -41,6 +42,8 @@ class FunctionsView {
                     .slice(0, 3)
                     .map(f => f.id)
             );
+        } else {
+            this.highSimilarityFunctions = new Set();
         }
 
         // Создаем сетку карточек
@@ -61,12 +64,14 @@ class FunctionsView {
 
     // Установка выбранной функции
     setSelectedFunction(functionId) {
+        console.log('FunctionsView: setSelectedFunction', functionId);
         this.selectedFunctionId = functionId;
         this.updateSelection();
     }
 
     // Обновление выделения
     updateSelection() {
+        console.log('FunctionsView: updateSelection');
         const cards = this.container.querySelectorAll('.function-card');
         cards.forEach(card => {
             card.classList.toggle('selected', card.dataset.id === this.selectedFunctionId);
@@ -75,6 +80,7 @@ class FunctionsView {
 
     // Привязка обработчиков событий
     bindEvents() {
+        console.log('FunctionsView: bindEvents');
         const cards = this.container.querySelectorAll('.function-card');
         cards.forEach(card => {
             card.addEventListener('click', () => {

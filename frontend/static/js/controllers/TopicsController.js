@@ -1,8 +1,10 @@
 class TopicsController {
-    constructor(topicModel, topicsView, selectionController) {
+    constructor(topicModel, topicsView, selectionController, functionsController = null, functionsView = null) {
         this.topicModel = topicModel;
         this.topicsView = topicsView;
         this.selectionController = selectionController;
+        this.functionsController = functionsController;
+        this.functionsView = functionsView;
 
         // Подписываемся на изменения в модели
         this.topicModel.subscribe(this.handleTopicsChange.bind(this));
@@ -10,6 +12,13 @@ class TopicsController {
         // Подписываемся на события выбора темы
         this.topicsView.container.addEventListener('topicSelected', this.handleTopicSelect.bind(this));
         this.topicsView.container.addEventListener('topicDeselected', this.handleTopicDeselect.bind(this));
+    }
+
+    setFunctionsController(functionsController) {
+        this.functionsController = functionsController;
+    }
+    setFunctionsView(functionsView) {
+        this.functionsView = functionsView;
     }
 
     handleTopicsChange() {
@@ -38,6 +47,10 @@ class TopicsController {
         const topics = this.topicModel.getAllTopics();
         console.log('TopicsController: render all topics (deselect)');
         this.topicsView.render(topics, null);
+        // После снятия выбора темы отображаем все функции без сходства
+        console.log('TopicsController: render all functions (deselect)');
+        const functions = this.functionsController.getAllFunctions();
+        this.functionsView.render(functions); // только список, без сходства
     }
 
     async loadTopics(disciplineId) {

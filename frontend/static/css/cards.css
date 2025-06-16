@@ -33,7 +33,7 @@
     background: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
-    padding: 15px;
+    padding: 15px 40px 15px 15px;
     margin-bottom: 15px;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -98,34 +98,75 @@
 }
 
 /* Метки для тем */
-.topic-type {
+.topic-type, .topic-hours {
+    position: static;
+    display: inline-block;
+    margin-left: 4px;
+    margin-right: 0;
+    vertical-align: middle;
+}
+
+.topic-card-footer {
     position: absolute;
-    top: 10px;
     right: 10px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-weight: bold;
-    font-size: 0.9em;
+    bottom: 10px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
 }
 
 .topic-type.lecture {
     background-color: #ffeb3b;
     color: #000;
+    border-radius: 4px;
+    padding: 4px 8px;
 }
 
 .topic-type.practical {
     background-color: #e040fb;
     color: #fff;
+    border-radius: 4px;
+    padding: 4px 8px;
 }
 
 .topic-hours {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    padding: 4px 8px;
-    border-radius: 4px;
     background-color: #f5f5f5;
     font-size: 0.9em;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+.close-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    background: #fff;
+    border: none;
+    font-size: 1.2em;
+    cursor: pointer;
+    color: #888;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    transition: background 0.2s;
+}
+.close-button:hover {
+    background: #f5f5f5;
+    color: #2196f3;
+}
+
+/* Удаляю старое позиционирование */
+.topic-type, .topic-hours {
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    position: static;
 }
 
 /* Стили для скроллбара */

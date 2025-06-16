@@ -1,9 +1,11 @@
 class FunctionsController {
-    constructor(functionModel, functionsView, selectionController) {
+    constructor(functionModel, functionsView, selectionController, topicsController = null, topicsView = null) {
         this.functionModel = functionModel;
         this.functionsView = functionsView;
         this.selectionController = selectionController;
-
+        this.topicsController = topicsController;
+        this.topicsView = topicsView;
+        console.log('FunctionsController: инициализация');
         // Подписываемся на изменения в модели
         this.functionModel.subscribe(this.handleFunctionsChange.bind(this));
 
@@ -11,12 +13,21 @@ class FunctionsController {
         this.functionsView.container.addEventListener('functionSelected', this.handleFunctionSelect.bind(this));
     }
 
+    setTopicsController(topicsController) {
+        this.topicsController = topicsController;
+    }
+    setTopicsView(topicsView) {
+        this.topicsView = topicsView;
+    }
+
     handleFunctionsChange() {
+        console.log('FunctionsController: handleFunctionsChange');
         const functions = this.functionModel.getAllFunctions();
         this.functionsView.render(functions);
     }
 
     async handleFunctionSelect(event) {
+        console.log('FunctionsController: handleFunctionSelect', event.detail);
         const { functionId } = event.detail;
         const func = this.functionModel.getFunctionById(functionId);
         if (func) {
@@ -35,14 +46,17 @@ class FunctionsController {
     }
 
     getAllFunctions() {
+        console.log('FunctionsController: getAllFunctions');
         return this.functionModel.getAllFunctions();
     }
 
     filterFunctions(predicate) {
+        console.log('FunctionsController: filterFunctions');
         return this.functionModel.filterFunctions(predicate);
     }
 
     updateRecommendations(recommendations) {
+        console.log('FunctionsController: updateRecommendations', recommendations);
         const recommendationsDiv = document.getElementById('recommendations');
         if (!recommendationsDiv) return;
 

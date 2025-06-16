@@ -39,12 +39,9 @@ class TopicsView {
 
         card.innerHTML = `
             <div class="topic-name">${topic.name}</div>
-            <span class="topic-type ${typeClass}">${typeText}</span>
-            ${topic.hours ? `<span class="topic-hours">${topic.hours}</span>` : ''}
-            ${topic.similarity ? `<span class="similarity-indicator">${topic.similarity.toFixed(2)}</span>` : ''}
         `;
 
-        // Добавляем кнопку закрытия, если тема выбрана
+        // Добавляем кнопку закрытия, если тема выбрана (правый верхний угол)
         if (
             selectedTopic &&
             String(topic.id) === String(selectedTopic.id) &&
@@ -55,11 +52,25 @@ class TopicsView {
             closeButton.innerHTML = '&times;';
             closeButton.addEventListener('click', (e) => {
                 e.stopPropagation();
-                console.log('TopicsView: выбрасываем topicDeselected (closeButton)');
                 this.container.dispatchEvent(new CustomEvent('topicDeselected', { bubbles: true }));
             });
             card.appendChild(closeButton);
         }
+
+        // Нижний правый угол: Л/П и часы
+        const footer = document.createElement('div');
+        footer.className = 'topic-card-footer';
+        const typeSpan = document.createElement('span');
+        typeSpan.className = `topic-type ${typeClass}`;
+        typeSpan.textContent = typeText;
+        footer.appendChild(typeSpan);
+        if (topic.hours) {
+            const hoursSpan = document.createElement('span');
+            hoursSpan.className = 'topic-hours';
+            hoursSpan.textContent = topic.hours;
+            footer.appendChild(hoursSpan);
+        }
+        card.appendChild(footer);
 
         card.addEventListener('click', (e) => {
             const clickedTopicId = card.getAttribute('data-topic-id');
